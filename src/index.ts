@@ -154,85 +154,145 @@ export class Router {
     pathStr: string,
     params: Record<string, string>,
   ): RouteMatch | null {
-    if (index === segments.length) {
-      const handlerRecord = node.handlers.get(method);
-      if (handlerRecord) {
-        handlerRecord.hits += 1;
-        return { handler: handlerRecord.handler, params, store: handlerRecord.store };
-      }
-
-      for (const child of node.wildcardChildren) {
-        const prev = params[child.name];
-        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
-        params[child.name] = '';
-        const result = this._walk(child.node, segments, segments.length, method, pathStr, params);
-        if (result) {
-          child.hits += 1;
-          return result;
+    type WalkFrame =
+      | {
+          type: 'visit';
+          node: RouteNode;
+          index: number;
+          paramName?: string;
+          paramValue?: string;
+          dynamicChild?: DynamicChild;
         }
-        if (hadPrev) {
-          params[child.name] = prev;
+      | { type: 'restore'; name: string; hadPrev: boolean; prev?: string }
+      | { type: 'popDynamic' }
+      | { type: 'regex'; node: RouteNode };
+
+    const stack: WalkFrame[] = [{ type: 'visit', node, index }];
+    const dynamicPath: DynamicChild[] = [];
+
+    while (stack.length) {
+      const frame = stack.pop()!;
+      if (frame.type === 'restore') {
+        if (frame.hadPrev) {
+          params[frame.name] = frame.prev as string;
         } else {
-          delete params[child.name];
+          delete params[frame.name];
+        }
+        continue;
+      }
+      if (frame.type === 'popDynamic') {
+        dynamicPath.pop();
+        continue;
+      }
+      if (frame.type === 'regex') {
+        if (frame.node.regexRoutes.length) {
+          for (let i = 0; i < frame.node.regexRoutes.length; i += 1) {
+            if (frame.node.regexMinDepths[i] > segments.length) continue;
+            const route = frame.node.regexRoutes[i];
+            if (!route.regex.test(pathStr)) continue;
+            const handlerRecord = route.handlers.get(method);
+            if (!handlerRecord) continue;
+            route.hits += 1;
+            handlerRecord.hits += 1;
+            for (const child of dynamicPath) child.hits += 1;
+            return { handler: handlerRecord.handler, params, store: handlerRecord.store };
+          }
+        }
+        continue;
+      }
+
+      if (frame.paramName !== undefined) {
+        params[frame.paramName] = frame.paramValue as string;
+      }
+      if (frame.dynamicChild) {
+        dynamicPath.push(frame.dynamicChild);
+      }
+
+      const currentNode = frame.node;
+      const idx = frame.index;
+
+      if (idx === segments.length) {
+        const handlerRecord = currentNode.handlers.get(method);
+        if (handlerRecord) {
+          handlerRecord.hits += 1;
+          for (const child of dynamicPath) child.hits += 1;
+          return { handler: handlerRecord.handler, params, store: handlerRecord.store };
+        }
+
+        if (currentNode.regexRoutes.length) {
+          stack.push({ type: 'regex', node: currentNode });
+        }
+
+        if (currentNode.wildcardChildren.length) {
+          for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
+            const child = currentNode.wildcardChildren[i];
+            const prev = params[child.name];
+            const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+            stack.push({ type: 'restore', name: child.name, hadPrev, prev });
+            stack.push({ type: 'popDynamic' });
+            stack.push({
+              type: 'visit',
+              node: child.node,
+              index: segments.length,
+              paramName: child.name,
+              paramValue: '',
+              dynamicChild: child,
+            });
+          }
+        }
+
+        continue;
+      }
+
+      if (currentNode.regexRoutes.length) {
+        stack.push({ type: 'regex', node: currentNode });
+      }
+
+      const segment = segments[idx];
+
+      if (currentNode.wildcardChildren.length) {
+        const rest = segments.slice(idx).join('/');
+        for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
+          const child = currentNode.wildcardChildren[i];
+          const prev = params[child.name];
+          const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+          stack.push({ type: 'restore', name: child.name, hadPrev, prev });
+          stack.push({ type: 'popDynamic' });
+          stack.push({
+            type: 'visit',
+            node: child.node,
+            index: segments.length,
+            paramName: child.name,
+            paramValue: rest,
+            dynamicChild: child,
+          });
         }
       }
-    }
 
-    if (index < segments.length) {
-      const segment = segments[index];
-      const staticChild = node.staticChildren.get(segment);
+      if (currentNode.paramChildren.length) {
+        for (let i = currentNode.paramChildren.length - 1; i >= 0; i -= 1) {
+          const child = currentNode.paramChildren[i];
+          if (child.regex && !child.regex.test(segment)) {
+            continue;
+          }
+          const prev = params[child.name];
+          const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+          stack.push({ type: 'restore', name: child.name, hadPrev, prev });
+          stack.push({ type: 'popDynamic' });
+          stack.push({
+            type: 'visit',
+            node: child.node,
+            index: idx + 1,
+            paramName: child.name,
+            paramValue: segment,
+            dynamicChild: child,
+          });
+        }
+      }
+
+      const staticChild = currentNode.staticChildren.get(segment);
       if (staticChild) {
-        const result = this._walk(staticChild, segments, index + 1, method, pathStr, params);
-        if (result) return result;
-      }
-
-      for (const child of node.paramChildren) {
-        if (child.regex && !child.regex.test(segment)) {
-          continue;
-        }
-        const prev = params[child.name];
-        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
-        params[child.name] = segment;
-        const result = this._walk(child.node, segments, index + 1, method, pathStr, params);
-        if (result) {
-          child.hits += 1;
-          return result;
-        }
-        if (hadPrev) {
-          params[child.name] = prev;
-        } else {
-          delete params[child.name];
-        }
-      }
-
-      for (const child of node.wildcardChildren) {
-        const rest = segments.slice(index).join('/');
-        const prev = params[child.name];
-        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
-        params[child.name] = rest;
-        const result = this._walk(child.node, segments, segments.length, method, pathStr, params);
-        if (result) {
-          child.hits += 1;
-          return result;
-        }
-        if (hadPrev) {
-          params[child.name] = prev;
-        } else {
-          delete params[child.name];
-        }
-      }
-    }
-
-    if (node.regexRoutes.length) {
-      for (let i = 0; i < node.regexRoutes.length; i += 1) {
-        if (node.regexMinDepths[i] > segments.length) continue;
-        const route = node.regexRoutes[i];
-        if (!route.regex.test(pathStr)) continue;
-        const handlerRecord = route.handlers.get(method);
-        if (!handlerRecord) continue;
-        route.hits += 1;
-        handlerRecord.hits += 1;
-        return { handler: handlerRecord.handler, params, store: handlerRecord.store };
+        stack.push({ type: 'visit', node: staticChild, index: idx + 1 });
       }
     }
 
