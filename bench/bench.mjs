@@ -9,6 +9,7 @@ const root = resolve(here, "..");
 
 const args = new Set(process.argv.slice(2));
 const jsonOutput = args.has("--json");
+const asyncMode = args.has("--async");
 const timeIndex = process.argv.indexOf("--time");
 const timeArg = timeIndex !== -1 ? Number(process.argv[timeIndex + 1]) : null;
 const benchTime = Number.isFinite(timeArg) && timeArg > 0 ? timeArg : 1000;
@@ -174,32 +175,262 @@ function buildTrouter() {
   }
 }
 
+function buildRadix3() {
+  try {
+    const { createRouter: createRadixRouter } = require("radix3");
+    const router = createRadixRouter();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    const stores = new Map();
+    for (const [method, path, handler] of fixtures) {
+      let store = stores.get(path);
+      if (!store) {
+        store = Object.create(null);
+        router.insert(path, store);
+        stores.set(path, store);
+      }
+      store[method] = handler;
+    }
+    return {
+      lookup: (method, path) => {
+        const match = router.lookup(path);
+        if (!match) return null;
+        return match[method] ?? match["*"] ?? null;
+      },
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildMedleyRouter() {
+  try {
+    const Router = require("@medley/router");
+    const router = new Router();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path, handler] of fixtures) {
+      const store = router.register(path);
+      store[method] = handler;
+    }
+    return {
+      lookup: (method, path) => {
+        const match = router.find(path);
+        if (!match) return null;
+        return match.store[method] ?? match.store["*"] ?? null;
+      },
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildIttyRouter() {
+  try {
+    const { IttyRouter } = require("itty-router");
+    const router = IttyRouter();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path, handler] of fixtures) {
+      const register = router[method.toLowerCase()] ?? router.all;
+      register.call(router, path, handler);
+    }
+    return {
+      lookup: async (method, path) => {
+        const request = new Request(`http://localhost${path}`, { method });
+        return router.fetch(request);
+      },
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function buildFastify() {
+  try {
+    const fastifyFactory = require("fastify");
+    const fastify = fastifyFactory({ logger: false });
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path] of fixtures) {
+      fastify.route({
+        method,
+        url: path,
+        handler: () => "",
+      });
+    }
+    await fastify.ready();
+    return {
+      lookup: (method, path) => fastify.inject({ method, url: path }),
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildHono() {
+  try {
+    const { Hono } = require("hono");
+    const app = new Hono();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path] of fixtures) {
+      app.on(method, path, () => new Response(null));
+    }
+    return {
+      lookup: (method, path) => app.request(path, { method }),
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildH3() {
+  try {
+    const { createApp, createRouter, eventHandler, toWebHandler } = require("h3");
+    const app = createApp();
+    const router = createRouter();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path] of fixtures) {
+      router[method.toLowerCase()](path, eventHandler(() => ""));
+    }
+    app.use(router);
+    const handler = toWebHandler(app);
+    return {
+      lookup: (method, path) => {
+        const request = new Request(`http://localhost${path}`, { method });
+        return handler(request);
+      },
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function createMockReqRes(method, path) {
+  const { IncomingMessage, ServerResponse } = require("node:http");
+  const { PassThrough } = require("node:stream");
+  const socket = new PassThrough();
+  socket.destroyed = false;
+  socket.setTimeout = () => {};
+  socket.destroy = () => {};
+  const req = new IncomingMessage(socket);
+  req.method = method;
+  req.url = path;
+  const res = new ServerResponse(req);
+  res.assignSocket(socket);
+  return { req, res };
+}
+
+function buildKoaRouter() {
+  try {
+    const Koa = require("koa");
+    const Router = require("@koa/router");
+    const app = new Koa();
+    const router = new Router();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path] of fixtures) {
+      router[method.toLowerCase()](path, (ctx) => {
+        ctx.status = 200;
+        ctx.body = "";
+      });
+    }
+    app.use(router.routes());
+    const handler = app.callback();
+    return {
+      lookup: async (method, path) => {
+        const { req, res } = createMockReqRes(method, path);
+        return handler(req, res);
+      },
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildTinyHttp() {
+  try {
+    const { App } = require("@tinyhttp/app");
+    const app = new App();
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path] of fixtures) {
+      app[method.toLowerCase()](path, (_req, res) => {
+        res.status(200).end("");
+      });
+    }
+    return {
+      lookup: async (method, path) => {
+        const { req, res } = createMockReqRes(method, path);
+        return app.handler(req, res);
+      },
+      async: true,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
 async function runBenchmarks() {
   const bench = new Bench({ time: benchTime });
   const warmupRounds = 50000;
   const lookupRng = createRng(seed ^ 0x9e3779b9);
 
-  const routers = [
-    ["balancing-router", buildBalancingRouter()],
-    ["find-my-way", buildFindMyWay()],
-    ["trouter", buildTrouter()],
-  ]
-    .filter((entry) => entry[1])
-    .filter((entry) => (onlyName ? entry[0] === onlyName : true));
+  const routerBuilders = [
+    ["balancing-router", () => buildBalancingRouter()],
+    ["find-my-way", () => buildFindMyWay()],
+    ["trouter", () => buildTrouter()],
+    ["radix3", () => buildRadix3()],
+    ["@medley/router", () => buildMedleyRouter()],
+    ["itty-router", () => (asyncMode ? buildIttyRouter() : null)],
+    ["fastify", () => (asyncMode ? buildFastify() : null)],
+    ["hono", () => (asyncMode ? buildHono() : null)],
+    ["h3", () => (asyncMode ? buildH3() : null)],
+    ["@koa/router", () => (asyncMode ? buildKoaRouter() : null)],
+    ["@tinyhttp/app", () => (asyncMode ? buildTinyHttp() : null)],
+  ];
+
+  const routers = [];
+  for (const [name, build] of routerBuilders) {
+    if (onlyName && name !== onlyName) continue;
+    const entry = await build();
+    if (!entry) continue;
+    routers.push([name, entry]);
+  }
 
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
     for (let i = 0; i < warmupRounds; i += 1) {
       const [method, path] = makeLookup(lookupRng);
-      lookup(method, path);
-    }
-    if (warmup) warmup();
-    bench.add(name, () => {
-      for (let i = 0; i < lookupsPerIteration; i += 1) {
-        const [method, path] = makeLookup(lookupRng);
+      if (asyncMode) {
+        await lookup(method, path);
+      } else {
         lookup(method, path);
       }
-    });
+    }
+    if (warmup) warmup();
+    if (asyncMode) {
+      bench.add(name, async () => {
+        for (let i = 0; i < lookupsPerIteration; i += 1) {
+          const [method, path] = makeLookup(lookupRng);
+          await lookup(method, path);
+        }
+      });
+    } else {
+      bench.add(name, () => {
+        for (let i = 0; i < lookupsPerIteration; i += 1) {
+          const [method, path] = makeLookup(lookupRng);
+          lookup(method, path);
+        }
+      });
+    }
   }
 
   await bench.run();
