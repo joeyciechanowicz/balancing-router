@@ -149,11 +149,18 @@ export class Router {
       }
 
       for (const child of node.wildcardChildren) {
-        const nextParams = { ...params, [child.name]: '' };
-        const result = this._walk(child.node, segments, segments.length, method, pathStr, nextParams);
+        const prev = params[child.name];
+        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+        params[child.name] = '';
+        const result = this._walk(child.node, segments, segments.length, method, pathStr, params);
         if (result) {
           child.hits += 1;
           return result;
+        }
+        if (hadPrev) {
+          params[child.name] = prev;
+        } else {
+          delete params[child.name];
         }
       }
     }
@@ -170,21 +177,35 @@ export class Router {
         if (child.regex && !child.regex.test(segment)) {
           continue;
         }
-        const nextParams = { ...params, [child.name]: segment };
-        const result = this._walk(child.node, segments, index + 1, method, pathStr, nextParams);
+        const prev = params[child.name];
+        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+        params[child.name] = segment;
+        const result = this._walk(child.node, segments, index + 1, method, pathStr, params);
         if (result) {
           child.hits += 1;
           return result;
+        }
+        if (hadPrev) {
+          params[child.name] = prev;
+        } else {
+          delete params[child.name];
         }
       }
 
       for (const child of node.wildcardChildren) {
         const rest = segments.slice(index).join('/');
-        const nextParams = { ...params, [child.name]: rest };
-        const result = this._walk(child.node, segments, segments.length, method, pathStr, nextParams);
+        const prev = params[child.name];
+        const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+        params[child.name] = rest;
+        const result = this._walk(child.node, segments, segments.length, method, pathStr, params);
         if (result) {
           child.hits += 1;
           return result;
+        }
+        if (hadPrev) {
+          params[child.name] = prev;
+        } else {
+          delete params[child.name];
         }
       }
     }
