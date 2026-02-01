@@ -12,6 +12,8 @@ const jsonOutput = args.has("--json");
 const timeIndex = process.argv.indexOf("--time");
 const timeArg = timeIndex !== -1 ? Number(process.argv[timeIndex + 1]) : null;
 const benchTime = Number.isFinite(timeArg) && timeArg > 0 ? timeArg : 1000;
+const onlyIndex = process.argv.indexOf("--only");
+const onlyName = onlyIndex !== -1 ? process.argv[onlyIndex + 1] : null;
 const routerPathIndex = process.argv.indexOf("--router");
 const routerPath =
   routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
@@ -150,7 +152,9 @@ async function runBenchmarks() {
     ["balancing-router", buildBalancingRouter()],
     ["find-my-way", buildFindMyWay()],
     ["trouter", buildTrouter()],
-  ].filter((entry) => entry[1]);
+  ]
+    .filter((entry) => entry[1])
+    .filter((entry) => (onlyName ? entry[0] === onlyName : true));
 
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
