@@ -12,9 +12,31 @@ function run(command, args, options = {}) {
 }
 
 function getPreviousIndex() {
-  const result = run('git', ['show', 'HEAD~1:index.js'], { cwd: root });
+  const result = run('git', ['show', 'HEAD~1:src/index.ts'], { cwd: root });
   if (result.status !== 0) return null;
   return result.stdout;
+}
+
+function buildRouter(sourcePath, outDir) {
+  const result = run('npx', [
+    'tsc',
+    '--target',
+    'ES2019',
+    '--module',
+    'CommonJS',
+    '--moduleResolution',
+    'Node',
+    '--declaration',
+    '--esModuleInterop',
+    '--skipLibCheck',
+    '--outDir',
+    outDir,
+    sourcePath,
+  ], { cwd: root });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || 'TypeScript build failed');
+  }
+  return resolve(outDir, 'index.js');
 }
 
 function runBench(routerPath) {
@@ -45,10 +67,13 @@ if (!previousIndex) {
 }
 
 const tmpDir = mkdtempSync(join(tmpdir(), 'balancing-router-'));
-const previousPath = resolve(tmpDir, 'index.js');
-writeFileSync(previousPath, previousIndex, 'utf8');
+const previousSource = resolve(tmpDir, 'index.ts');
+writeFileSync(previousSource, previousIndex, 'utf8');
 
-const current = runBench();
+const previousPath = buildRouter(previousSource, resolve(tmpDir, 'prev-dist'));
+const currentPath = buildRouter(resolve(root, 'src', 'index.ts'), resolve(tmpDir, 'current-dist'));
+
+const current = runBench(currentPath);
 const previous = runBench(previousPath);
 
 const previousMap = new Map(previous.results.map((entry) => [entry.name, entry]));

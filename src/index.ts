@@ -1,67 +1,56 @@
-'use strict';
+export type RouteHandler = (req: any, res: any, params: Record<string, string>) => any;
 
-/**
- * @typedef {(req: any, res: any, params: Record<string, string>) => any} RouteHandler
- * @typedef {{ handler: RouteHandler, params: Record<string, string>, store?: any }} RouteMatch
- * @typedef {{ rebalanceInterval?: number }} RouterOptions
- */
-
-/**
- * @typedef {{
- *  kind: 'param' | 'wildcard',
- *  name: string,
- *  node: RouteNode,
- *  regex?: RegExp,
- *  hits: number
- * }} DynamicChild
- */
-
-/**
- * @typedef {{
- *  regex: RegExp,
- *  handlers: Map<string, RouteHandlerRecord>,
- *  hits: number
- * }} RegexRoute
- */
-
-/**
- * @typedef {{ handler: RouteHandler, store?: any, hits: number }} RouteHandlerRecord
- */
-
-class RouteNode {
-  constructor() {
-    this.staticChildren = new Map();
-    /** @type {DynamicChild[]} */
-    this.paramChildren = [];
-    /** @type {DynamicChild[]} */
-    this.wildcardChildren = [];
-    /** @type {RegexRoute[]} */
-    this.regexRoutes = [];
-    /** @type {Map<string, RouteHandlerRecord>} */
-    this.handlers = new Map();
-  }
+export interface RouteMatch {
+  handler: RouteHandler;
+  params: Record<string, string>;
+  store?: any;
 }
 
-class Router {
-  /**
-   * @param {RouterOptions} [options]
-   */
-  constructor(options = {}) {
+export interface RouterOptions {
+  rebalanceInterval?: number;
+}
+
+interface RouteHandlerRecord {
+  handler: RouteHandler;
+  store?: any;
+  hits: number;
+}
+
+interface RegexRoute {
+  regex: RegExp;
+  handlers: Map<string, RouteHandlerRecord>;
+  hits: number;
+}
+
+interface DynamicChild {
+  kind: 'param' | 'wildcard';
+  name: string;
+  node: RouteNode;
+  regex?: RegExp;
+  hits: number;
+}
+
+class RouteNode {
+  staticChildren = new Map<string, RouteNode>();
+  paramChildren: DynamicChild[] = [];
+  wildcardChildren: DynamicChild[] = [];
+  regexRoutes: RegexRoute[] = [];
+  handlers = new Map<string, RouteHandlerRecord>();
+}
+
+export class Router {
+  private readonly options: Required<RouterOptions>;
+  private readonly _root = new RouteNode();
+  private _lookupCount = 0;
+
+  constructor(options: RouterOptions = {}) {
     this.options = {
       rebalanceInterval: 1000,
       ...options,
     };
-    this._root = new RouteNode();
-    this._lookupCount = 0;
   }
 
-  /**
-   * @param {string | string[]} method
-   * @param {string | RegExp} path
-   * @param {RouteHandler} handler
-   * @param {any} [store]
-   */
-  on(method, path, handler, store) {
+  on(method: string | string[], path: string | RegExp, handler: RouteHandler, store?: any): this {
     const methods = Array.isArray(method) ? method : [method];
     for (const m of methods) {
       if (path instanceof RegExp) {
@@ -73,12 +62,7 @@ class Router {
     return this;
   }
 
-  /**
-   * @param {string} method
-   * @param {string} path
-   * @returns {RouteMatch | null}
-   */
-  find(method, path) {
+  find(method: string, path: string): RouteMatch | null {
     const methodKey = normalizeMethod(method);
     const pathStr = normalizePath(path);
     const segments = splitPath(pathStr);
@@ -94,7 +78,7 @@ class Router {
     return match;
   }
 
-  rebalance() {
+  rebalance(): void {
     const stack = [this._root];
     while (stack.length) {
       const node = stack.pop();
@@ -110,13 +94,7 @@ class Router {
     }
   }
 
-  /**
-   * @param {string} method
-   * @param {string} path
-   * @param {RouteHandler} handler
-   * @param {any} [store]
-   */
-  _addRoute(method, path, handler, store) {
+  private _addRoute(method: string, path: string, handler: RouteHandler, store?: any): void {
     const methodKey = normalizeMethod(method);
     const pathStr = normalizePath(path);
     const segments = splitPath(pathStr);
@@ -147,13 +125,7 @@ class Router {
     this._registerHandler(node, methodKey, handler, store);
   }
 
-  /**
-   * @param {string} method
-   * @param {RegExp} regex
-   * @param {RouteHandler} handler
-   * @param {any} [store]
-   */
-  _addRegexRoute(method, regex, handler, store) {
+  private _addRegexRoute(method: string, regex: RegExp, handler: RouteHandler, store?: any): void {
     const methodKey = normalizeMethod(method);
     const prefix = extractRegexLiteralPrefix(regex);
     const lastSlash = prefix.lastIndexOf('/');
@@ -176,16 +148,14 @@ class Router {
     this._registerHandler(existing, methodKey, handler, store);
   }
 
-  /**
-   * @param {RouteNode} node
-   * @param {string[]} segments
-   * @param {number} index
-   * @param {string} method
-   * @param {string} pathStr
-   * @param {Record<string, string>} params
-   * @returns {RouteMatch | null}
-   */
-  _walk(node, segments, index, method, pathStr, params) {
+  private _walk(
+    node: RouteNode,
+    segments: string[],
+    index: number,
+    method: string,
+    pathStr: string,
+    params: Record<string, string>,
+  ): RouteMatch | null {
     if (index === segments.length) {
       const handlerRecord = node.handlers.get(method);
       if (handlerRecord) {
@@ -248,11 +218,7 @@ class Router {
     return null;
   }
 
-  /**
-   * @param {RouteNode} node
-   * @param {string} segment
-   */
-  _ensureStaticChild(node, segment) {
+  private _ensureStaticChild(node: RouteNode, segment: string): RouteNode {
     let child = node.staticChildren.get(segment);
     if (!child) {
       child = new RouteNode();
@@ -261,13 +227,7 @@ class Router {
     return child;
   }
 
-  /**
-   * @param {RouteNode} node
-   * @param {string} name
-   * @param {RegExp | undefined} regex
-   * @returns {DynamicChild}
-   */
-  _ensureParamChild(node, name, regex) {
+  private _ensureParamChild(node: RouteNode, name: string, regex?: RegExp): DynamicChild {
     let child = node.paramChildren.find((entry) => entry.name === name && matchRegex(entry.regex, regex));
     if (!child) {
       child = {
@@ -282,12 +242,7 @@ class Router {
     return child;
   }
 
-  /**
-   * @param {RouteNode} node
-   * @param {string} name
-   * @returns {DynamicChild}
-   */
-  _ensureWildcardChild(node, name) {
+  private _ensureWildcardChild(node: RouteNode, name: string): DynamicChild {
     let child = node.wildcardChildren.find((entry) => entry.name === name);
     if (!child) {
       child = {
@@ -301,56 +256,39 @@ class Router {
     return child;
   }
 
-  /**
-   * @param {RouteNode | RegexRoute} target
-   * @param {string} method
-   * @param {RouteHandler} handler
-   * @param {any} [store]
-   */
-  _registerHandler(target, method, handler, store) {
+  private _registerHandler(
+    target: RouteNode | RegexRoute,
+    method: string,
+    handler: RouteHandler,
+    store?: any,
+  ): void {
     const key = normalizeMethod(method);
     target.handlers.set(key, { handler, store, hits: 0 });
   }
 }
 
-/**
- * @param {RouterOptions} [options]
- */
-function createRouter(options) {
+export function createRouter(options?: RouterOptions): Router {
   return new Router(options);
 }
 
-/**
- * @param {string} method
- */
-function normalizeMethod(method) {
+function normalizeMethod(method: string): string {
   const value = String(method || '*').trim();
   return value === '' ? '*' : value.toUpperCase();
 }
 
-/**
- * @param {string} path
- */
-function normalizePath(path) {
+function normalizePath(path: string): string {
   if (path == null) return '/';
   const value = String(path);
   if (value === '' || value === '/') return '/';
   return value.startsWith('/') ? value : `/${value}`;
 }
 
-/**
- * @param {string} path
- */
-function splitPath(path) {
+function splitPath(path: string): string[] {
   if (path === '/') return [];
   return path.split('/').filter(Boolean);
 }
 
-/**
- * @param {string} segment
- * @returns {{ name: string, pattern?: string, wildcard?: boolean } | null}
- */
-function parseParamSegment(segment) {
+function parseParamSegment(segment: string): { name: string; pattern?: string; wildcard?: boolean } | null {
   if (!segment.startsWith(':')) return null;
   const wildcardMatch = segment.match(/^:([A-Za-z0-9_]+)\*$/);
   if (wildcardMatch) {
@@ -361,11 +299,7 @@ function parseParamSegment(segment) {
   return { name: match[1], pattern: match[2] };
 }
 
-/**
- * Extracts a literal prefix from a regex (best-effort).
- * @param {RegExp} regex
- */
-function extractRegexLiteralPrefix(regex) {
+function extractRegexLiteralPrefix(regex: RegExp): string {
   const source = regex.source;
   let index = 0;
   let prefix = '';
@@ -387,17 +321,8 @@ function extractRegexLiteralPrefix(regex) {
   return prefix;
 }
 
-/**
- * @param {RegExp | undefined} a
- * @param {RegExp | undefined} b
- */
-function matchRegex(a, b) {
+function matchRegex(a?: RegExp, b?: RegExp): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
   return a.source === b.source && a.flags === b.flags;
 }
-
-module.exports = {
-  Router,
-  createRouter,
-};

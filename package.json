@@ -1,10 +1,11 @@
 {
   "name": "balancing-router",
   "version": "1.0.0",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "node --test",
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test",
     "bench": "node bench/bench.mjs",
     "bench:compare": "node scripts/bench/compare.mjs"
   },
@@ -21,8 +22,11 @@
   "homepage": "https://github.com/joeyciechanowicz/balancing-router#readme",
   "description": "Trie-based HTTP router with adaptive rebalancing.",
   "devDependencies": {
+    "@types/node": "^20.11.30",
     "find-my-way": "^8.2.0",
     "tinybench": "^2.7.1",
-    "trouter": "^3.2.2"
+    "trouter": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.4.5"
   }
 }

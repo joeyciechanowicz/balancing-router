@@ -17,7 +17,7 @@ function loadRouter() {
     const routerRequire = createRequire(resolve(routerPath));
     return routerRequire(routerPath);
   }
-  return require(resolve(root, 'index.js'));
+  return require(resolve(root, 'dist', 'index.js'));
 }
 
 const { createRouter } = loadRouter();

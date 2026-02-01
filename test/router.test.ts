@@ -1,8 +1,6 @@
-'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { createRouter } = require('../index.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRouter } from '../src/index';
 
 const noop = () => {};
 
@@ -33,7 +31,7 @@ test('matches param routes with regex constraints', () => {
   const numeric = router.find('GET', '/orders/123');
   const nonNumeric = router.find('GET', '/orders/abc');
   assert.ok(numeric);
-  assert.equal(numeric.handler, noop);
+  assert.equal(numeric?.handler, noop);
   assert.equal(nonNumeric, null);
 });
 
@@ -85,7 +83,7 @@ test('rebalances dynamic children by hits', () => {
   router.find('GET', '/two');
   router.find('GET', '/one');
 
-  const root = router._root;
+  const root = (router as any)._root;
   assert.equal(root.paramChildren.length, 2);
   router.rebalance();
   assert.equal(root.paramChildren[0].node.handlers.get('GET').handler, handlerB);
