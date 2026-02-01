@@ -40,7 +40,7 @@ class RouteNode {
 
 export class Router {
   private readonly _root = new RouteNode();
-  private readonly _cache = new Map<string, Map<string, RouteMatch | null>>();
+  private readonly _cache = new Map<string, Record<string, RouteMatch | null>>();
   private _cacheKeys: Array<{ method: string; path: string }> = [];
   private _cacheLimit = 1024;
   private _cacheSize = 0;
@@ -82,7 +82,7 @@ export class Router {
       pathStr = normalizePath(path);
     }
     const methodMap = this._cache.get(methodKey);
-    const cached = methodMap?.get(pathStr);
+    const cached = methodMap ? methodMap[pathStr] : undefined;
     if (cached !== undefined) {
       return cached;
     }
@@ -372,11 +372,11 @@ export class Router {
   private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
     let methodCache = this._cache.get(method);
     if (!methodCache) {
-      methodCache = new Map();
+      methodCache = Object.create(null) as Record<string, RouteMatch | null>;
       this._cache.set(method, methodCache);
     }
-    if (methodCache.has(path)) {
-      methodCache.set(path, value);
+    if (methodCache[path] !== undefined) {
+      methodCache[path] = value;
       return;
     }
     if (this._cacheSize >= this._cacheLimit) {
@@ -384,14 +384,13 @@ export class Router {
       if (oldest) {
         const oldMethodCache = this._cache.get(oldest.method);
         if (oldMethodCache) {
-          oldMethodCache.delete(oldest.path);
-          if (oldMethodCache.size === 0) this._cache.delete(oldest.method);
+          delete oldMethodCache[oldest.path];
           this._cacheSize = Math.max(0, this._cacheSize - 1);
         }
       }
     }
     this._cacheKeys.push({ method, path });
-    methodCache.set(path, value);
+    methodCache[path] = value;
     this._cacheSize += 1;
   }
 }
