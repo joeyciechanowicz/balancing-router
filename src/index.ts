@@ -122,10 +122,10 @@ export class Router {
     const segments = splitPath(pathStr);
     const depth = segments.length;
     const restCache = buildRestCache(segments, depth);
-    const match = this._walk(this._root, segments, restCache, depth, 0, methodKey, pathStr, {});
+    const match = this._walk(this._root, segments, restCache, depth, 0, methodKey, pathStr, null);
     let resolved = match;
     if (!resolved && methodKey !== '*') {
-      resolved = this._walk(this._root, segments, restCache, depth, 0, '*', pathStr, {});
+      resolved = this._walk(this._root, segments, restCache, depth, 0, '*', pathStr, null);
     }
     this._cacheSet(methodKey, pathStr, resolved);
     return resolved;
@@ -211,7 +211,7 @@ export class Router {
     index: number,
     method: string,
     pathStr: string,
-    params: Record<string, string>,
+    params: Record<string, string> | null,
   ): RouteMatch | null {
     type WalkFrame =
       | {
@@ -232,10 +232,12 @@ export class Router {
     while (stack.length) {
       const frame = stack.pop()!;
       if (frame.type === 'restore') {
-        if (frame.hadPrev) {
-          params[frame.name] = frame.prev as string;
-        } else {
-          delete params[frame.name];
+        if (params) {
+          if (frame.hadPrev) {
+            params[frame.name] = frame.prev as string;
+          } else {
+            delete params[frame.name];
+          }
         }
         continue;
       }
@@ -254,14 +256,19 @@ export class Router {
             route.hits += 1;
             handlerRecord.hits += 1;
             for (const child of dynamicPath) child.hits += 1;
-            return { handler: handlerRecord.handler, params, store: handlerRecord.store };
+            return {
+              handler: handlerRecord.handler,
+              params: params ?? EMPTY_PARAMS,
+              store: handlerRecord.store,
+            };
           }
         }
         continue;
       }
 
       if (frame.paramName !== undefined) {
-        params[frame.paramName] = frame.paramValue as string;
+        const paramsRef = params ?? (params = Object.create(null));
+        paramsRef[frame.paramName] = frame.paramValue as string;
       }
       if (frame.dynamicChild) {
         dynamicPath.push(frame.dynamicChild);
@@ -275,7 +282,11 @@ export class Router {
         if (handlerRecord) {
           handlerRecord.hits += 1;
           for (const child of dynamicPath) child.hits += 1;
-          return { handler: handlerRecord.handler, params, store: handlerRecord.store };
+          return {
+            handler: handlerRecord.handler,
+            params: params ?? EMPTY_PARAMS,
+            store: handlerRecord.store,
+          };
         }
 
         if (currentNode.regexRoutes.length) {
@@ -285,8 +296,9 @@ export class Router {
         if (currentNode.wildcardChildren.length) {
           for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
             const child = currentNode.wildcardChildren[i];
-            const prev = params[child.name];
-            const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+            const paramsRef = params ?? (params = Object.create(null));
+            const prev = paramsRef[child.name];
+            const hadPrev = Object.prototype.hasOwnProperty.call(paramsRef, child.name);
             stack.push({ type: 'restore', name: child.name, hadPrev, prev });
             stack.push({ type: 'popDynamic' });
             stack.push({
@@ -313,8 +325,9 @@ export class Router {
         const rest = restCache[idx];
         for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
           const child = currentNode.wildcardChildren[i];
-          const prev = params[child.name];
-          const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+          const paramsRef = params ?? (params = Object.create(null));
+          const prev = paramsRef[child.name];
+          const hadPrev = Object.prototype.hasOwnProperty.call(paramsRef, child.name);
           stack.push({ type: 'restore', name: child.name, hadPrev, prev });
           stack.push({ type: 'popDynamic' });
           stack.push({
@@ -334,8 +347,9 @@ export class Router {
           if (child.regex && !child.regex.test(segment)) {
             continue;
           }
-          const prev = params[child.name];
-          const hadPrev = Object.prototype.hasOwnProperty.call(params, child.name);
+          const paramsRef = params ?? (params = Object.create(null));
+          const prev = paramsRef[child.name];
+          const hadPrev = Object.prototype.hasOwnProperty.call(paramsRef, child.name);
           stack.push({ type: 'restore', name: child.name, hadPrev, prev });
           stack.push({ type: 'popDynamic' });
           stack.push({
@@ -486,6 +500,8 @@ export class Router {
 export function createRouter(): Router {
   return new Router();
 }
+
+const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 
 function buildRestCache(segments: string[], depth: number): string[] {
   if (depth === 0) return [''];
