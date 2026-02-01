@@ -379,16 +379,31 @@ export function createRouter(): Router {
   return new Router();
 }
 
+const methodCache = new Map<string, string>();
+
 function normalizeMethod(method: string): string {
-  const value = String(method || '*').trim();
+  if (method == null) return '*';
+  if (typeof method === 'string') {
+    const cached = methodCache.get(method);
+    if (cached) return cached;
+    const value = method.trim();
+    const normalized = value === '' ? '*' : value.toUpperCase();
+    methodCache.set(method, normalized);
+    return normalized;
+  }
+  const value = String(method).trim();
   return value === '' ? '*' : value.toUpperCase();
 }
 
 function normalizePath(path: string): string {
   if (path == null) return '/';
+  if (typeof path === 'string') {
+    if (path === '' || path === '/') return '/';
+    return path.charCodeAt(0) === 47 ? path : `/${path}`;
+  }
   const value = String(path);
   if (value === '' || value === '/') return '/';
-  return value.startsWith('/') ? value : `/${value}`;
+  return value.charCodeAt(0) === 47 ? value : `/${value}`;
 }
 
 function splitPath(path: string): string[] {
