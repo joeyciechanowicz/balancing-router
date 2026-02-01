@@ -88,7 +88,33 @@ export class Router {
     } else {
       pathStr = normalizePath(path);
     }
-    const methodMap = this._getMethodCache(methodKey);
+    let methodMap: Record<string, RouteMatch | null> | undefined;
+    switch (methodKey) {
+      case 'GET':
+        methodMap = this._cacheGET;
+        break;
+      case 'POST':
+        methodMap = this._cachePOST;
+        break;
+      case 'PUT':
+        methodMap = this._cachePUT;
+        break;
+      case 'PATCH':
+        methodMap = this._cachePATCH;
+        break;
+      case 'DELETE':
+        methodMap = this._cacheDELETE;
+        break;
+      case 'HEAD':
+        methodMap = this._cacheHEAD;
+        break;
+      case 'OPTIONS':
+        methodMap = this._cacheOPTIONS;
+        break;
+      default:
+        methodMap = this._cache.get(methodKey);
+        break;
+    }
     const cached = methodMap ? methodMap[pathStr] : undefined;
     if (cached !== undefined) {
       return cached;
