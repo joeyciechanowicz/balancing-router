@@ -51,14 +51,9 @@ function buildBalancingRouter() {
     router.on(method, path, handler);
   }
   router.on("GET", /^\/api\/v\d+\/health$/, () => {});
-  let counter = 0;
-  return (method, path) => {
-    const result = router.find(method, path);
-    counter += 1;
-    if (counter % 50000 === 0) {
-      router.rebalance();
-    }
-    return result;
+  return {
+    lookup: (method, path) => router.find(method, path),
+    warmup: () => router.rebalance(),
   };
 }
 
@@ -69,7 +64,7 @@ function buildFindMyWay() {
     for (const [method, path, handler] of routeFixtures) {
       router.on(method, path, handler);
     }
-    return (method, path) => router.find(method, path);
+    return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
     return null;
   }
@@ -82,7 +77,7 @@ function buildTrouter() {
     for (const [method, path, handler] of routeFixtures) {
       router.add(method, path, handler);
     }
-    return (method, path) => router.find(method, path);
+    return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
     console.error("trouter", error);
     return null;
@@ -91,6 +86,7 @@ function buildTrouter() {
 
 async function runBenchmarks() {
   const bench = new Bench({ time: 200 });
+  const warmupRounds = 50000;
 
   const routers = [
     ["balancing-router", buildBalancingRouter()],
@@ -98,7 +94,14 @@ async function runBenchmarks() {
     ["trouter", buildTrouter()],
   ].filter((entry) => entry[1]);
 
-  for (const [name, lookup] of routers) {
+  for (const [name, routerEntry] of routers) {
+    const { lookup, warmup } = routerEntry;
+    for (let i = 0; i < warmupRounds; i += 1) {
+      for (const [method, path] of lookups) {
+        lookup(method, path);
+      }
+    }
+    if (warmup) warmup();
     bench.add(name, () => {
       for (const [method, path] of lookups) {
         lookup(method, path);
