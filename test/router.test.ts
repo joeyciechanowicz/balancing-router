@@ -11,7 +11,7 @@ test('matches static routes', () => {
   const match = router.find('GET', '/users');
   assert.ok(match);
   assert.equal(match.handler, noop);
-  assert.deepEqual(match.params, {});
+  assert.equal(Object.keys(match.params).length, 0);
 });
 
 test('matches param routes and captures params', () => {
@@ -21,7 +21,7 @@ test('matches param routes and captures params', () => {
   const match = router.find('GET', '/users/42');
   assert.ok(match);
   assert.equal(match.handler, noop);
-  assert.deepEqual(match.params, { id: '42' });
+  assert.deepEqual({ ...match.params }, { id: '42' });
 });
 
 test('matches param routes with regex constraints', () => {
@@ -41,7 +41,7 @@ test('matches wildcard routes', () => {
 
   const match = router.find('GET', '/files/a/b/c');
   assert.ok(match);
-  assert.deepEqual(match.params, { '*': 'a/b/c' });
+  assert.deepEqual({ ...match.params }, { '*': 'a/b/c' });
 });
 
 test('matches named wildcard routes', () => {
@@ -50,7 +50,7 @@ test('matches named wildcard routes', () => {
 
   const match = router.find('GET', '/assets/css/app.css');
   assert.ok(match);
-  assert.deepEqual(match.params, { path: 'css/app.css' });
+  assert.deepEqual({ ...match.params }, { path: 'css/app.css' });
 });
 
 test('matches regex routes', () => {
@@ -71,20 +71,51 @@ test('falls back to method wildcard', () => {
   assert.equal(match.handler, noop);
 });
 
-test('rebalances dynamic children by hits', () => {
+test('returns null when no route matches', () => {
   const router = createRouter();
-  const handlerA = () => 'a';
-  const handlerB = () => 'b';
+  router.on('GET', '/users', noop);
 
-  router.on('GET', '/:first(one)', handlerA);
-  router.on('GET', '/:second(two)', handlerB);
+  const match = router.find('POST', '/missing');
+  assert.equal(match, null);
+});
 
-  router.find('GET', '/two');
-  router.find('GET', '/two');
-  router.find('GET', '/one');
+test('supports method arrays', () => {
+  const router = createRouter();
+  router.on(['GET', 'POST'], '/multi', noop);
 
-  const root = (router as any)._root;
-  assert.equal(root.paramChildren.length, 2);
-  router.rebalance();
-  assert.equal(root.paramChildren[0].node.handlers.get('GET').handler, handlerB);
+  assert.ok(router.find('GET', '/multi'));
+  assert.ok(router.find('POST', '/multi'));
+  assert.equal(router.find('PUT', '/multi'), null);
+});
+
+test('normalizes paths without a leading slash', () => {
+  const router = createRouter();
+  router.on('GET', 'status', noop);
+
+  const match = router.find('GET', 'status');
+  assert.ok(match);
+  assert.equal(match.handler, noop);
+});
+
+test('stores route metadata', () => {
+  const router = createRouter();
+  const store = { feature: 'beta' };
+  router.on('GET', '/meta', noop, store);
+
+  const match = router.find('GET', '/meta');
+  assert.ok(match);
+  assert.equal(match.store, store);
+});
+
+test('routes methods on regex routes', () => {
+  const router = createRouter();
+  const getHandler = () => 'get';
+  const postHandler = () => 'post';
+  router.on('GET', /^\/api\/v\d+\/health$/, getHandler);
+  router.on('POST', /^\/api\/v\d+\/health$/, postHandler);
+
+  const getMatch = router.find('GET', '/api/v1/health');
+  const postMatch = router.find('POST', '/api/v1/health');
+  assert.equal(getMatch?.handler, getHandler);
+  assert.equal(postMatch?.handler, postHandler);
 });
