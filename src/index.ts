@@ -27,6 +27,8 @@ interface DynamicChild {
   hits: number;
 }
 
+const methodCache = new Map<string, string>();
+
 class RouteNode {
   staticChildren = new Map<string, RouteNode>();
   paramChildren: DynamicChild[] = [];
@@ -58,10 +60,20 @@ export class Router {
   }
 
   find(method: string, path: string): RouteMatch | null {
-    const methodKey = normalizeMethod(method);
+    let methodKey: string;
+    if (typeof method === 'string') {
+      const cached = methodCache.get(method);
+      if (cached) {
+        methodKey = cached;
+      } else {
+        methodKey = normalizeMethod(method);
+      }
+    } else {
+      methodKey = normalizeMethod(method);
+    }
     const pathStr = normalizePath(path);
-    const methodCache = this._cache.get(methodKey);
-    const cached = methodCache?.get(pathStr);
+    const methodMap = this._cache.get(methodKey);
+    const cached = methodMap?.get(pathStr);
     if (cached !== undefined) {
       return cached;
     }
@@ -378,8 +390,6 @@ export class Router {
 export function createRouter(): Router {
   return new Router();
 }
-
-const methodCache = new Map<string, string>();
 
 function normalizeMethod(method: string): string {
   if (method == null) return '*';
