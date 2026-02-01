@@ -40,7 +40,7 @@ function buildRouter(sourcePath, outDir) {
 }
 
 function runBench(routerPath) {
-  const args = ['bench/bench.mjs', '--json'];
+  const args = ['bench/bench.mjs', '--json', '--time', '1000'];
   if (routerPath) {
     args.push('--router', routerPath);
   }
