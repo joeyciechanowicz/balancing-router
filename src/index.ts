@@ -30,7 +30,7 @@ interface DynamicChild {
 const methodCache = Object.create(null) as Record<string, string>;
 
 class RouteNode {
-  staticChildren = new Map<string, RouteNode>();
+  staticChildren: Record<string, RouteNode> = Object.create(null);
   paramChildren: DynamicChild[] = [];
   wildcardChildren: DynamicChild[] = [];
   regexRoutes: RegexRoute[] = [];
@@ -111,8 +111,8 @@ export class Router {
       node.paramChildren.sort((a, b) => b.hits - a.hits);
       node.wildcardChildren.sort((a, b) => b.hits - a.hits);
       node.regexRoutes.sort((a, b) => b.hits - a.hits);
-      for (const child of node.staticChildren.values()) {
-        stack.push(child);
+      for (const key in node.staticChildren) {
+        stack.push(node.staticChildren[key]);
       }
       for (const child of node.paramChildren) stack.push(child.node);
       for (const child of node.wildcardChildren) stack.push(child.node);
@@ -319,7 +319,7 @@ export class Router {
         }
       }
 
-      const staticChild = currentNode.staticChildren.get(segment);
+      const staticChild = currentNode.staticChildren[segment];
       if (staticChild) {
         stack.push({ type: 'visit', node: staticChild, index: idx + 1 });
       }
@@ -329,10 +329,10 @@ export class Router {
   }
 
   private _ensureStaticChild(node: RouteNode, segment: string): RouteNode {
-    let child = node.staticChildren.get(segment);
+    let child = node.staticChildren[segment];
     if (!child) {
       child = new RouteNode();
-      node.staticChildren.set(segment, child);
+      node.staticChildren[segment] = child;
     }
     return child;
   }
