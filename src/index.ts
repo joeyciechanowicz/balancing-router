@@ -95,10 +95,11 @@ export class Router {
     }
     const segments = splitPath(pathStr);
     const depth = segments.length;
-    const match = this._walk(this._root, segments, depth, 0, methodKey, pathStr, {});
+    const restCache = buildRestCache(segments, depth);
+    const match = this._walk(this._root, segments, restCache, depth, 0, methodKey, pathStr, {});
     let resolved = match;
     if (!resolved && methodKey !== '*') {
-      resolved = this._walk(this._root, segments, depth, 0, '*', pathStr, {});
+      resolved = this._walk(this._root, segments, restCache, depth, 0, '*', pathStr, {});
     }
     this._cacheSet(methodKey, pathStr, resolved);
     return resolved;
@@ -179,6 +180,7 @@ export class Router {
   private _walk(
     node: RouteNode,
     segments: string[],
+    restCache: string[],
     depth: number,
     index: number,
     method: string,
@@ -282,7 +284,7 @@ export class Router {
       const segment = segments[idx];
 
       if (currentNode.wildcardChildren.length) {
-        const rest = segments.slice(idx).join('/');
+        const rest = restCache[idx];
         for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
           const child = currentNode.wildcardChildren[i];
           const prev = params[child.name];
@@ -457,6 +459,17 @@ export class Router {
 
 export function createRouter(): Router {
   return new Router();
+}
+
+function buildRestCache(segments: string[], depth: number): string[] {
+  if (depth === 0) return [''];
+  const restCache = new Array(depth + 1);
+  restCache[depth] = '';
+  for (let i = depth - 1; i >= 0; i -= 1) {
+    const next = restCache[i + 1];
+    restCache[i] = next ? `${segments[i]}/${next}` : segments[i];
+  }
+  return restCache;
 }
 
 function normalizeMethod(method: string): string {
