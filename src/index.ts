@@ -94,10 +94,11 @@ export class Router {
       return cached;
     }
     const segments = splitPath(pathStr);
-    const match = this._walk(this._root, segments, 0, methodKey, pathStr, {});
+    const depth = segments.length;
+    const match = this._walk(this._root, segments, depth, 0, methodKey, pathStr, {});
     let resolved = match;
     if (!resolved && methodKey !== '*') {
-      resolved = this._walk(this._root, segments, 0, '*', pathStr, {});
+      resolved = this._walk(this._root, segments, depth, 0, '*', pathStr, {});
     }
     this._cacheSet(methodKey, pathStr, resolved);
     return resolved;
@@ -178,6 +179,7 @@ export class Router {
   private _walk(
     node: RouteNode,
     segments: string[],
+    depth: number,
     index: number,
     method: string,
     pathStr: string,
@@ -216,8 +218,8 @@ export class Router {
       if (frame.type === 'regex') {
         if (frame.node.regexRoutes.length) {
           for (let i = 0; i < frame.node.regexRoutes.length; i += 1) {
-            if (frame.node.regexMinDepths[i] > segments.length) continue;
-            const route = frame.node.regexRoutes[i];
+        if (frame.node.regexMinDepths[i] > depth) continue;
+        const route = frame.node.regexRoutes[i];
             if (!route.regex.test(pathStr)) continue;
             const handlerRecord = route.handlers.get(method);
             if (!handlerRecord) continue;
@@ -240,7 +242,7 @@ export class Router {
       const currentNode = frame.node;
       const idx = frame.index;
 
-      if (idx === segments.length) {
+      if (idx === depth) {
         const handlerRecord = currentNode.handlers.get(method);
         if (handlerRecord) {
           handlerRecord.hits += 1;
@@ -262,7 +264,7 @@ export class Router {
             stack.push({
               type: 'visit',
               node: child.node,
-              index: segments.length,
+              index: depth,
               paramName: child.name,
               paramValue: '',
               dynamicChild: child,
@@ -290,7 +292,7 @@ export class Router {
           stack.push({
             type: 'visit',
             node: child.node,
-            index: segments.length,
+            index: depth,
             paramName: child.name,
             paramValue: rest,
             dynamicChild: child,
