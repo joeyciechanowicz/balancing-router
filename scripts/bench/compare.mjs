@@ -40,7 +40,7 @@ function buildRouter(sourcePath, outDir) {
 }
 
 function runBench(routerPath) {
-  const args = ['bench/bench.mjs', '--json', '--time', '1000'];
+  const args = ['bench/bench.mjs', '--json', '--time', '1000', '--seed', String(seed)];
   if (routerPath) {
     args.push('--router', routerPath);
   }
@@ -59,6 +59,7 @@ function formatDelta(current, previous) {
 }
 
 const previousIndex = getPreviousIndex();
+const seed = process.env.BENCH_SEED ? Number(process.env.BENCH_SEED) : Date.now();
 if (!previousIndex) {
   console.log('No previous commit found. Running current benchmarks only.');
   const current = runBench();

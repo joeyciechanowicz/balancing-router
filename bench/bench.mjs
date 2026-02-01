@@ -14,9 +14,37 @@ const timeArg = timeIndex !== -1 ? Number(process.argv[timeIndex + 1]) : null;
 const benchTime = Number.isFinite(timeArg) && timeArg > 0 ? timeArg : 1000;
 const onlyIndex = process.argv.indexOf("--only");
 const onlyName = onlyIndex !== -1 ? process.argv[onlyIndex + 1] : null;
+const seedIndex = process.argv.indexOf("--seed");
+const seedArg = seedIndex !== -1 ? Number(process.argv[seedIndex + 1]) : null;
+const seed =
+  Number.isFinite(seedArg) && seedArg !== null ? seedArg : Date.now();
+const lookupsPerIteration = 64;
 const routerPathIndex = process.argv.indexOf("--router");
 const routerPath =
   routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
+
+function createRng(initial) {
+  let value = initial >>> 0;
+  return () => {
+    value |= 0;
+    value = (value + 0x6d2b79f5) | 0;
+    let t = Math.imul(value ^ (value >>> 15), 1 | value);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle(array, rng) {
+  for (let i = array.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function pick(array, rng) {
+  return array[Math.floor(rng() * array.length)];
+}
 
 function loadRouter() {
   if (routerPath) {
@@ -52,62 +80,57 @@ const routeFixtures = [
   ["DELETE", "/orders/:orderId", () => {}],
 ];
 
-const lookups = [];
 const userIds = ["1", "42", "123", "999", "1001"];
 const productIds = ["10", "200", "1234", "7777", "9090"];
 const orderIds = ["500", "600", "700", "800"];
 const itemIds = ["1", "2", "3"];
 const slugs = ["hello-world", "node-routing", "perf-tips"];
 const months = ["01", "02", "12"];
+const categories = ["books", "tech", "home"];
+const years = ["2023", "2024"];
+const assetFiles = ["css/app.css", "js/app.js", "img/logo.png"];
+const searchTerms = ["node", "router", "http", "perf"];
 
-lookups.push(["GET", "/users"]);
-for (const id of userIds) {
-  lookups.push(["GET", `/users/${id}`]);
-  lookups.push(["GET", `/users/${id}/settings`]);
-  lookups.push(["GET", `/api/v1/users/${id}`]);
-  lookups.push(["GET", `/api/v2/users/${id}/settings`]);
-  lookups.push(["PATCH", `/users/${id}`]);
-  lookups.push(["DELETE", `/users/${id}`]);
-}
-lookups.push(["GET", "/assets/css/app.css"]);
-lookups.push(["GET", "/assets/js/app.js"]);
-lookups.push(["GET", "/assets/img/logo.png"]);
-lookups.push(["GET", "/health"]);
-lookups.push(["GET", "/search/node"]);
-lookups.push(["GET", "/search/router"]);
-lookups.push(["POST", "/users"]);
-lookups.push(["POST", "/orders"]);
-
-lookups.push(["GET", "/products"]);
-for (const id of productIds) {
-  lookups.push(["GET", `/products/${id}`]);
-  lookups.push(["GET", `/products/${id}/reviews`]);
-  lookups.push(["PUT", `/products/${id}`]);
-}
-
-for (const id of orderIds) {
-  lookups.push(["GET", `/orders/${id}`]);
-  lookups.push(["DELETE", `/orders/${id}`]);
-  for (const itemId of itemIds) {
-    lookups.push(["GET", `/orders/${id}/items/${itemId}`]);
+function makeLookup(rng) {
+  const roll = rng();
+  if (roll < 0.15) return ["GET", "/users"];
+  if (roll < 0.25) return ["GET", `/users/${pick(userIds, rng)}`];
+  if (roll < 0.3) return ["GET", `/users/${pick(userIds, rng)}/settings`];
+  if (roll < 0.35) return ["GET", `/api/v1/users/${pick(userIds, rng)}`];
+  if (roll < 0.4) return ["GET", `/api/v2/users/${pick(userIds, rng)}/settings`];
+  if (roll < 0.45) return ["PATCH", `/users/${pick(userIds, rng)}`];
+  if (roll < 0.5) return ["DELETE", `/users/${pick(userIds, rng)}`];
+  if (roll < 0.55) return ["GET", `/assets/${pick(assetFiles, rng)}`];
+  if (roll < 0.6) return ["GET", "/health"];
+  if (roll < 0.65) return ["GET", `/search/${pick(searchTerms, rng)}`];
+  if (roll < 0.7) return ["POST", "/users"];
+  if (roll < 0.75) return ["POST", "/orders"];
+  if (roll < 0.8) return ["GET", "/products"];
+  if (roll < 0.85) return ["GET", `/products/${pick(productIds, rng)}`];
+  if (roll < 0.88) return ["GET", `/products/${pick(productIds, rng)}/reviews`];
+  if (roll < 0.91) return ["PUT", `/products/${pick(productIds, rng)}`];
+  if (roll < 0.94) return ["GET", `/orders/${pick(orderIds, rng)}`];
+  if (roll < 0.96) return ["DELETE", `/orders/${pick(orderIds, rng)}`];
+  if (roll < 0.98) {
+    return [
+      "GET",
+      `/orders/${pick(orderIds, rng)}/items/${pick(itemIds, rng)}`,
+    ];
   }
-}
-
-for (const categoryId of ["books", "tech", "home"]) {
-  lookups.push(["GET", `/categories/${categoryId}/products`]);
-}
-
-for (const year of ["2023", "2024"]) {
-  for (const month of months) {
-    for (const slug of slugs) {
-      lookups.push(["GET", `/blog/${year}/${month}/${slug}`]);
-    }
+  if (roll < 0.99) {
+    return ["GET", `/categories/${pick(categories, rng)}/products`];
   }
+  return [
+    "GET",
+    `/blog/${pick(years, rng)}/${pick(months, rng)}/${pick(slugs, rng)}`,
+  ];
 }
 
 function buildBalancingRouter() {
+  const rng = createRng(seed);
+  const fixtures = shuffle([...routeFixtures], rng);
   const router = createRouter();
-  for (const [method, path, handler] of routeFixtures) {
+  for (const [method, path, handler] of fixtures) {
     router.on(method, path, handler);
   }
   router.on("GET", /^\/api\/v\d+\/health$/, () => {});
@@ -121,7 +144,9 @@ function buildFindMyWay() {
   try {
     const findMyWay = require("find-my-way");
     const router = findMyWay();
-    for (const [method, path, handler] of routeFixtures) {
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path, handler] of fixtures) {
       router.on(method, path, handler);
     }
     return { lookup: (method, path) => router.find(method, path) };
@@ -134,7 +159,9 @@ function buildTrouter() {
   try {
     const { Trouter } = require("trouter");
     const router = new Trouter();
-    for (const [method, path, handler] of routeFixtures) {
+    const rng = createRng(seed);
+    const fixtures = shuffle([...routeFixtures], rng);
+    for (const [method, path, handler] of fixtures) {
       router.add(method, path, handler);
     }
     return { lookup: (method, path) => router.find(method, path) };
@@ -147,6 +174,7 @@ function buildTrouter() {
 async function runBenchmarks() {
   const bench = new Bench({ time: benchTime });
   const warmupRounds = 50000;
+  const lookupRng = createRng(seed ^ 0x9e3779b9);
 
   const routers = [
     ["balancing-router", buildBalancingRouter()],
@@ -159,13 +187,13 @@ async function runBenchmarks() {
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
     for (let i = 0; i < warmupRounds; i += 1) {
-      for (const [method, path] of lookups) {
-        lookup(method, path);
-      }
+      const [method, path] = makeLookup(lookupRng);
+      lookup(method, path);
     }
     if (warmup) warmup();
     bench.add(name, () => {
-      for (const [method, path] of lookups) {
+      for (let i = 0; i < lookupsPerIteration; i += 1) {
+        const [method, path] = makeLookup(lookupRng);
         lookup(method, path);
       }
     });
@@ -183,7 +211,7 @@ async function runBenchmarks() {
 
 const results = await runBenchmarks();
 if (jsonOutput) {
-  console.log(JSON.stringify({ results }, null, 2));
+  console.log(JSON.stringify({ results, seed }, null, 2));
 } else {
   for (const result of results) {
     console.log(
