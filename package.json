@@ -1,0 +1,28 @@
+{
+  "name": "balancing-router",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "node --test",
+    "bench": "node bench/bench.mjs",
+    "bench:compare": "node scripts/bench/compare.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joeyciechanowicz/balancing-router.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/joeyciechanowicz/balancing-router/issues"
+  },
+  "homepage": "https://github.com/joeyciechanowicz/balancing-router#readme",
+  "description": "Trie-based HTTP router with adaptive rebalancing.",
+  "devDependencies": {
+    "find-my-way": "^8.2.0",
+    "tinybench": "^2.7.1",
+    "trouter": "^3.2.2"
+  }
+}
