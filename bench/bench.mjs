@@ -1,4 +1,4 @@
-import { Bench } from "tinybench";
+import { bench, measure, run } from "mitata";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -19,7 +19,6 @@ const seedIndex = process.argv.indexOf("--seed");
 const seedArg = seedIndex !== -1 ? Number(process.argv[seedIndex + 1]) : null;
 const seed =
   Number.isFinite(seedArg) && seedArg !== null ? seedArg : Date.now();
-const lookupsPerIteration = 64;
 const routerPathIndex = process.argv.indexOf("--router");
 const routerPath =
   routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
@@ -56,6 +55,20 @@ function loadRouter() {
 }
 
 const { createRouter } = loadRouter();
+function logBuildError(name, error) {
+  const message = error && error.stack ? error.stack : String(error);
+  console.error(`[bench] ${name} setup failed:\n${message}`);
+}
+const requestCache = new Map();
+function getRequest(method, path) {
+  const key = `${method} ${path}`;
+  let request = requestCache.get(key);
+  if (!request) {
+    request = new Request(`http://localhost${path}`, { method });
+    requestCache.set(key, request);
+  }
+  return request;
+}
 
 const routeFixtures = [
   ["GET", "/users", () => {}],
@@ -80,6 +93,10 @@ const routeFixtures = [
   ["DELETE", "/users/:id", () => {}],
   ["DELETE", "/orders/:orderId", () => {}],
 ];
+const shuffledFixtures = shuffle(
+  [...routeFixtures],
+  createRng(seed ^ 0x6b43a9d5),
+);
 
 const userIds = ["1", "42", "123", "999", "1001"];
 const productIds = ["10", "200", "1234", "7777", "9090"];
@@ -129,13 +146,10 @@ function makeLookup(rng) {
 }
 
 function buildBalancingRouter() {
-  const rng = createRng(seed);
-  const fixtures = shuffle([...routeFixtures], rng);
   const router = createRouter();
-  for (const [method, path, handler] of fixtures) {
+  for (const [method, path, handler] of shuffledFixtures) {
     router.on(method, path, handler);
   }
-  let count = 0;
   return {
     lookup: (method, path) => {
       return router.find(method, path);
@@ -148,13 +162,12 @@ function buildFindMyWay() {
   try {
     const findMyWay = require("find-my-way");
     const router = findMyWay();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path, handler] of fixtures) {
+    for (const [method, path, handler] of shuffledFixtures) {
       router.on(method, path, handler);
     }
     return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
+    logBuildError("find-my-way", error);
     return null;
   }
 }
@@ -163,14 +176,12 @@ function buildTrouter() {
   try {
     const { Trouter } = require("trouter");
     const router = new Trouter();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path, handler] of fixtures) {
+    for (const [method, path, handler] of shuffledFixtures) {
       router.add(method, path, handler);
     }
     return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
-    console.error("trouter", error);
+    logBuildError("trouter", error);
     return null;
   }
 }
@@ -179,10 +190,8 @@ function buildRadix3() {
   try {
     const { createRouter: createRadixRouter } = require("radix3");
     const router = createRadixRouter();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
     const stores = new Map();
-    for (const [method, path, handler] of fixtures) {
+    for (const [method, path, handler] of shuffledFixtures) {
       let store = stores.get(path);
       if (!store) {
         store = Object.create(null);
@@ -199,6 +208,7 @@ function buildRadix3() {
       },
     };
   } catch (error) {
+    logBuildError("radix3", error);
     return null;
   }
 }
@@ -207,9 +217,7 @@ function buildMedleyRouter() {
   try {
     const Router = require("@medley/router");
     const router = new Router();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path, handler] of fixtures) {
+    for (const [method, path, handler] of shuffledFixtures) {
       const store = router.register(path);
       store[method] = handler;
     }
@@ -221,6 +229,7 @@ function buildMedleyRouter() {
       },
     };
   } catch (error) {
+    logBuildError("@medley/router", error);
     return null;
   }
 }
@@ -229,20 +238,19 @@ function buildIttyRouter() {
   try {
     const { IttyRouter } = require("itty-router");
     const router = IttyRouter();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path, handler] of fixtures) {
+    for (const [method, path, handler] of shuffledFixtures) {
       const register = router[method.toLowerCase()] ?? router.all;
       register.call(router, path, handler);
     }
     return {
-      lookup: async (method, path) => {
-        const request = new Request(`http://localhost${path}`, { method });
-        return router.fetch(request);
+      lookup: async (method, path, request) => {
+        return router.fetch(request ?? getRequest(method, path));
       },
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("itty-router", error);
     return null;
   }
 }
@@ -251,9 +259,7 @@ async function buildFastify() {
   try {
     const fastifyFactory = require("fastify");
     const fastify = fastifyFactory({ logger: false });
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path] of fixtures) {
+    for (const [method, path] of shuffledFixtures) {
       fastify.route({
         method,
         url: path,
@@ -264,8 +270,10 @@ async function buildFastify() {
     return {
       lookup: (method, path) => fastify.inject({ method, url: path }),
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("fastify", error);
     return null;
   }
 }
@@ -274,40 +282,48 @@ function buildHono() {
   try {
     const { Hono } = require("hono");
     const app = new Hono();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path] of fixtures) {
+    for (const [method, path] of shuffledFixtures) {
       app.on(method, path, () => new Response(null));
     }
     return {
-      lookup: (method, path) => app.request(path, { method }),
+      lookup: (method, path, request) =>
+        app.request(request ?? path, request ? undefined : { method }),
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("hono", error);
     return null;
   }
 }
 
 function buildH3() {
   try {
-    const { createApp, createRouter, eventHandler, toWebHandler } = require("h3");
+    const {
+      createApp,
+      createRouter,
+      eventHandler,
+      toWebHandler,
+    } = require("h3");
     const app = createApp();
     const router = createRouter();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path] of fixtures) {
-      router[method.toLowerCase()](path, eventHandler(() => ""));
+    for (const [method, path] of shuffledFixtures) {
+      router[method.toLowerCase()](
+        path,
+        eventHandler(() => ""),
+      );
     }
     app.use(router);
     const handler = toWebHandler(app);
     return {
-      lookup: (method, path) => {
-        const request = new Request(`http://localhost${path}`, { method });
-        return handler(request);
+      lookup: (method, path, request) => {
+        return handler(request ?? getRequest(method, path));
       },
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("h3", error);
     return null;
   }
 }
@@ -327,16 +343,26 @@ function createMockReqRes(method, path) {
   return { req, res };
 }
 
+function toPathToRegexpPattern(path) {
+  if (path.includes(":")) {
+    return path.replace(/:([A-Za-z0-9_]+)\*/g, "*$1");
+  }
+  return path;
+}
+
+function toRegexparamPattern(path) {
+  return path.replace(/:([A-Za-z0-9_]+)\*/g, "*");
+}
+
 function buildKoaRouter() {
   try {
     const Koa = require("koa");
     const Router = require("@koa/router");
     const app = new Koa();
     const router = new Router();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path] of fixtures) {
-      router[method.toLowerCase()](path, (ctx) => {
+    for (const [method, path] of shuffledFixtures) {
+      const koaPath = toPathToRegexpPattern(path);
+      router[method.toLowerCase()](koaPath, (ctx) => {
         ctx.status = 200;
         ctx.body = "";
       });
@@ -349,8 +375,10 @@ function buildKoaRouter() {
         return handler(req, res);
       },
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("@koa/router", error);
     return null;
   }
 }
@@ -359,10 +387,9 @@ function buildTinyHttp() {
   try {
     const { App } = require("@tinyhttp/app");
     const app = new App();
-    const rng = createRng(seed);
-    const fixtures = shuffle([...routeFixtures], rng);
-    for (const [method, path] of fixtures) {
-      app[method.toLowerCase()](path, (_req, res) => {
+    for (const [method, path] of shuffledFixtures) {
+      const tinyPath = toRegexparamPattern(path);
+      app[method.toLowerCase()](tinyPath, (_req, res) => {
         res.status(200).end("");
       });
     }
@@ -372,16 +399,30 @@ function buildTinyHttp() {
         return app.handler(req, res);
       },
       async: true,
+      framework: true,
     };
   } catch (error) {
+    logBuildError("@tinyhttp/app", error);
     return null;
   }
 }
 
+function calculateRme(samples) {
+  if (!samples || samples.length < 2) return 0;
+  const n = samples.length;
+  const mean = samples.reduce((sum, value) => sum + value, 0) / n;
+  if (mean === 0) return 0;
+  const variance =
+    samples.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (n - 1);
+  const standardError = Math.sqrt(variance) / Math.sqrt(n);
+  const margin = 1.96 * standardError;
+  return (margin / mean) * 100;
+}
+
 async function runBenchmarks() {
-  const bench = new Bench({ time: benchTime });
   const warmupRounds = 50000;
   const lookupRng = createRng(seed ^ 0x9e3779b9);
+  const results = [];
 
   const routerBuilders = [
     ["balancing-router", () => buildBalancingRouter()],
@@ -405,48 +446,76 @@ async function runBenchmarks() {
     routers.push([name, entry]);
   }
 
+  if (!jsonOutput) {
+    for (const [name, routerEntry] of routers) {
+      const { lookup, warmup } = routerEntry;
+      for (let i = 0; i < warmupRounds; i += 1) {
+        const [method, path] = makeLookup(lookupRng);
+        if (asyncMode) {
+          await lookup(method, path, getRequest(method, path));
+        } else {
+          lookup(method, path);
+        }
+      }
+      if (warmup) warmup();
+      bench(
+        name,
+        asyncMode
+          ? async () => {
+              const [method, path] = makeLookup(lookupRng);
+              await lookup(method, path, getRequest(method, path));
+            }
+          : () => {
+              const [method, path] = makeLookup(lookupRng);
+              lookup(method, path);
+            },
+      );
+    }
+    await run({ format: "mitata" });
+    return null;
+  }
+
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
     for (let i = 0; i < warmupRounds; i += 1) {
       const [method, path] = makeLookup(lookupRng);
       if (asyncMode) {
-        await lookup(method, path);
+        await lookup(method, path, getRequest(method, path));
       } else {
         lookup(method, path);
       }
     }
     if (warmup) warmup();
-    if (asyncMode) {
-      bench.add(name, async () => {
-        for (let i = 0; i < lookupsPerIteration; i += 1) {
-          const [method, path] = makeLookup(lookupRng);
-          await lookup(method, path);
-        }
-      });
-    } else {
-      bench.add(name, () => {
-        for (let i = 0; i < lookupsPerIteration; i += 1) {
-          const [method, path] = makeLookup(lookupRng);
-          lookup(method, path);
-        }
-      });
-    }
+    const stats = await measure(
+      asyncMode
+        ? async () => {
+            const [method, path] = makeLookup(lookupRng);
+            await lookup(method, path, getRequest(method, path));
+          }
+        : () => {
+            const [method, path] = makeLookup(lookupRng);
+            lookup(method, path);
+          },
+      { min_cpu_time: benchTime * 1e6 },
+    );
+
+    const hz = stats.avg > 0 ? 1e9 / stats.avg : 0;
+    const samples = stats.samples ?? [];
+    results.push({
+      name,
+      hz,
+      samples: samples.length,
+      rme: calculateRme(samples),
+    });
   }
 
-  await bench.run();
-
-  return bench.tasks.map((task) => ({
-    name: task.name,
-    hz: task.result?.hz ?? 0,
-    samples: task.result?.samples?.length ?? 0,
-    rme: task.result?.rme ?? 0,
-  }));
+  return results.sort((a, b) => a.hz - b.hz);
 }
 
 const results = await runBenchmarks();
 if (jsonOutput) {
   console.log(JSON.stringify({ results, seed }, null, 2));
-} else {
+} else if (results) {
   for (const result of results) {
     console.log(
       `${result.name}: ${Math.round(result.hz).toLocaleString()} ops/sec (samples: ${result.samples}, rme: ${result.rme.toFixed(2)}%)`,
