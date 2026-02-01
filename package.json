@@ -7,7 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test",
     "bench": "node bench/bench.mjs",
-    "bench:compare": "node scripts/bench/compare.mjs"
+    "bench:compare": "node scripts/bench/compare.mjs",
+    "profile:router": "node --prof scripts/profile-router.mjs"
   },
   "repository": {
     "type": "git",
