@@ -97,7 +97,8 @@ function makeLookup(rng) {
   if (roll < 0.25) return ["GET", `/users/${pick(userIds, rng)}`];
   if (roll < 0.3) return ["GET", `/users/${pick(userIds, rng)}/settings`];
   if (roll < 0.35) return ["GET", `/api/v1/users/${pick(userIds, rng)}`];
-  if (roll < 0.4) return ["GET", `/api/v2/users/${pick(userIds, rng)}/settings`];
+  if (roll < 0.4)
+    return ["GET", `/api/v2/users/${pick(userIds, rng)}/settings`];
   if (roll < 0.45) return ["PATCH", `/users/${pick(userIds, rng)}`];
   if (roll < 0.5) return ["DELETE", `/users/${pick(userIds, rng)}`];
   if (roll < 0.55) return ["GET", `/assets/${pick(assetFiles, rng)}`];
@@ -133,9 +134,11 @@ function buildBalancingRouter() {
   for (const [method, path, handler] of fixtures) {
     router.on(method, path, handler);
   }
-  router.on("GET", /^\/api\/v\d+\/health$/, () => {});
+  let count = 0;
   return {
-    lookup: (method, path) => router.find(method, path),
+    lookup: (method, path) => {
+      return router.find(method, path);
+    },
     warmup: () => router.rebalance(),
   };
 }
