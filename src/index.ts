@@ -44,6 +44,13 @@ export class Router {
   private _cacheKeys: Array<{ method: string; path: string }> = [];
   private _cacheLimit = 1024;
   private _cacheSize = 0;
+  private _cacheGET?: Record<string, RouteMatch | null>;
+  private _cachePOST?: Record<string, RouteMatch | null>;
+  private _cachePUT?: Record<string, RouteMatch | null>;
+  private _cachePATCH?: Record<string, RouteMatch | null>;
+  private _cacheDELETE?: Record<string, RouteMatch | null>;
+  private _cacheHEAD?: Record<string, RouteMatch | null>;
+  private _cacheOPTIONS?: Record<string, RouteMatch | null>;
 
   constructor() {}
 
@@ -81,7 +88,7 @@ export class Router {
     } else {
       pathStr = normalizePath(path);
     }
-    const methodMap = this._cache.get(methodKey);
+    const methodMap = this._getMethodCache(methodKey);
     const cached = methodMap ? methodMap[pathStr] : undefined;
     if (cached !== undefined) {
       return cached;
@@ -370,11 +377,7 @@ export class Router {
   }
 
   private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
-    let methodCache = this._cache.get(method);
-    if (!methodCache) {
-      methodCache = Object.create(null) as Record<string, RouteMatch | null>;
-      this._cache.set(method, methodCache);
-    }
+    let methodCache = this._getOrCreateMethodCache(method);
     if (methodCache[path] !== undefined) {
       methodCache[path] = value;
       return;
@@ -382,7 +385,7 @@ export class Router {
     if (this._cacheSize >= this._cacheLimit) {
       const oldest = this._cacheKeys.shift();
       if (oldest) {
-        const oldMethodCache = this._cache.get(oldest.method);
+        const oldMethodCache = this._getMethodCache(oldest.method);
         if (oldMethodCache) {
           delete oldMethodCache[oldest.path];
           this._cacheSize = Math.max(0, this._cacheSize - 1);
@@ -392,6 +395,61 @@ export class Router {
     this._cacheKeys.push({ method, path });
     methodCache[path] = value;
     this._cacheSize += 1;
+  }
+
+  private _getMethodCache(method: string): Record<string, RouteMatch | null> | undefined {
+    switch (method) {
+      case 'GET':
+        return this._cacheGET;
+      case 'POST':
+        return this._cachePOST;
+      case 'PUT':
+        return this._cachePUT;
+      case 'PATCH':
+        return this._cachePATCH;
+      case 'DELETE':
+        return this._cacheDELETE;
+      case 'HEAD':
+        return this._cacheHEAD;
+      case 'OPTIONS':
+        return this._cacheOPTIONS;
+      default:
+        return this._cache.get(method);
+    }
+  }
+
+  private _getOrCreateMethodCache(method: string): Record<string, RouteMatch | null> {
+    switch (method) {
+      case 'GET':
+        if (!this._cacheGET) this._cacheGET = Object.create(null);
+        return this._cacheGET;
+      case 'POST':
+        if (!this._cachePOST) this._cachePOST = Object.create(null);
+        return this._cachePOST;
+      case 'PUT':
+        if (!this._cachePUT) this._cachePUT = Object.create(null);
+        return this._cachePUT;
+      case 'PATCH':
+        if (!this._cachePATCH) this._cachePATCH = Object.create(null);
+        return this._cachePATCH;
+      case 'DELETE':
+        if (!this._cacheDELETE) this._cacheDELETE = Object.create(null);
+        return this._cacheDELETE;
+      case 'HEAD':
+        if (!this._cacheHEAD) this._cacheHEAD = Object.create(null);
+        return this._cacheHEAD;
+      case 'OPTIONS':
+        if (!this._cacheOPTIONS) this._cacheOPTIONS = Object.create(null);
+        return this._cacheOPTIONS;
+      default: {
+        let methodCache = this._cache.get(method);
+        if (!methodCache) {
+          methodCache = Object.create(null);
+          this._cache.set(method, methodCache);
+        }
+        return methodCache;
+      }
+    }
   }
 }
 
