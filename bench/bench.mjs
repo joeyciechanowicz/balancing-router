@@ -55,7 +55,7 @@ function buildBalancingRouter() {
   return (method, path) => {
     const result = router.find(method, path);
     counter += 1;
-    if (counter % 2000 === 0) {
+    if (counter % 50000 === 0) {
       router.rebalance();
     }
     return result;
