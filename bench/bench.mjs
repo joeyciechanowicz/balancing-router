@@ -1,47 +1,48 @@
-import { Bench } from 'tinybench';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { Bench } from "tinybench";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..');
+const root = resolve(here, "..");
 
 const args = new Set(process.argv.slice(2));
-const jsonOutput = args.has('--json');
-const routerPathIndex = process.argv.indexOf('--router');
-const routerPath = routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
+const jsonOutput = args.has("--json");
+const routerPathIndex = process.argv.indexOf("--router");
+const routerPath =
+  routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
 
 function loadRouter() {
   if (routerPath) {
     const routerRequire = createRequire(resolve(routerPath));
     return routerRequire(routerPath);
   }
-  return require(resolve(root, 'dist', 'index.js'));
+  return require(resolve(root, "dist", "index.js"));
 }
 
 const { createRouter } = loadRouter();
 
 const routeFixtures = [
-  ['GET', '/users', () => {}],
-  ['GET', '/users/:id', () => {}],
-  ['GET', '/users/:id/settings', () => {}],
-  ['GET', '/assets/:path*', () => {}],
-  ['GET', '/health', () => {}],
-  ['GET', '/search/:query', () => {}],
-  ['POST', '/users', () => {}],
-  ['DELETE', '/users/:id', () => {}],
+  ["GET", "/users", () => {}],
+  ["GET", "/users/:id", () => {}],
+  ["GET", "/users/:id/settings", () => {}],
+  ["GET", "/assets/:path*", () => {}],
+  ["GET", "/health", () => {}],
+  ["GET", "/search/:query", () => {}],
+  ["POST", "/users", () => {}],
+  ["DELETE", "/users/:id", () => {}],
 ];
 
 const lookups = [
-  ['GET', '/users'],
-  ['GET', '/users/123'],
-  ['GET', '/users/123/settings'],
-  ['GET', '/assets/css/app.css'],
-  ['GET', '/health'],
-  ['GET', '/search/node'],
-  ['POST', '/users'],
-  ['DELETE', '/users/999'],
+  ["GET", "/users"],
+  ["GET", "/users/123"],
+  ["GET", "/users/123/settings"],
+  ["GET", "/assets/css/app.css"],
+  ["GET", "/health"],
+  ["GET", "/search/node"],
+  ["POST", "/users"],
+  ["DELETE", "/users/999"],
 ];
 
 function buildBalancingRouter() {
@@ -49,13 +50,13 @@ function buildBalancingRouter() {
   for (const [method, path, handler] of routeFixtures) {
     router.on(method, path, handler);
   }
-  router.on('GET', /^\/api\/v\d+\/health$/, () => {});
+  router.on("GET", /^\/api\/v\d+\/health$/, () => {});
   return (method, path) => router.find(method, path);
 }
 
 function buildFindMyWay() {
   try {
-    const findMyWay = require('find-my-way');
+    const findMyWay = require("find-my-way");
     const router = findMyWay();
     for (const [method, path, handler] of routeFixtures) {
       router.on(method, path, handler);
@@ -68,13 +69,14 @@ function buildFindMyWay() {
 
 function buildTrouter() {
   try {
-    const trouter = require('trouter');
-    const router = trouter();
+    const { Trouter } = require("trouter");
+    const router = new Trouter();
     for (const [method, path, handler] of routeFixtures) {
       router.add(method, path, handler);
     }
     return (method, path) => router.find(method, path);
   } catch (error) {
+    console.error("trouter", error);
     return null;
   }
 }
@@ -83,9 +85,9 @@ async function runBenchmarks() {
   const bench = new Bench({ time: 200 });
 
   const routers = [
-    ['balancing-router', buildBalancingRouter()],
-    ['find-my-way', buildFindMyWay()],
-    ['trouter', buildTrouter()],
+    ["balancing-router", buildBalancingRouter()],
+    ["find-my-way", buildFindMyWay()],
+    ["trouter", buildTrouter()],
   ].filter((entry) => entry[1]);
 
   for (const [name, lookup] of routers) {
@@ -110,6 +112,8 @@ if (jsonOutput) {
   console.log(JSON.stringify({ results }, null, 2));
 } else {
   for (const result of results) {
-    console.log(`${result.name}: ${Math.round(result.hz).toLocaleString()} ops/sec (samples: ${result.samples})`);
+    console.log(
+      `${result.name}: ${Math.round(result.hz).toLocaleString()} ops/sec (samples: ${result.samples})`,
+    );
   }
 }
