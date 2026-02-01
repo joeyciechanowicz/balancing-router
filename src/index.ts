@@ -422,32 +422,32 @@ export class Router {
     switch (method) {
       case 'GET':
         if (!this._cacheGET) this._cacheGET = Object.create(null);
-        return this._cacheGET;
+        return this._cacheGET!;
       case 'POST':
         if (!this._cachePOST) this._cachePOST = Object.create(null);
-        return this._cachePOST;
+        return this._cachePOST!;
       case 'PUT':
         if (!this._cachePUT) this._cachePUT = Object.create(null);
-        return this._cachePUT;
+        return this._cachePUT!;
       case 'PATCH':
         if (!this._cachePATCH) this._cachePATCH = Object.create(null);
-        return this._cachePATCH;
+        return this._cachePATCH!;
       case 'DELETE':
         if (!this._cacheDELETE) this._cacheDELETE = Object.create(null);
-        return this._cacheDELETE;
+        return this._cacheDELETE!;
       case 'HEAD':
         if (!this._cacheHEAD) this._cacheHEAD = Object.create(null);
-        return this._cacheHEAD;
+        return this._cacheHEAD!;
       case 'OPTIONS':
         if (!this._cacheOPTIONS) this._cacheOPTIONS = Object.create(null);
-        return this._cacheOPTIONS;
+        return this._cacheOPTIONS!;
       default: {
         let methodCache = this._cache.get(method);
         if (!methodCache) {
-          methodCache = Object.create(null);
+          methodCache = Object.create(null) as Record<string, RouteMatch | null>;
           this._cache.set(method, methodCache);
         }
-        return methodCache;
+        return methodCache as Record<string, RouteMatch | null>;
       }
     }
   }
