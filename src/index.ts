@@ -68,25 +68,28 @@ export class Router {
 
   find(method: string, path: string): RouteMatch | null {
     let methodKey: string;
-    if (typeof method === 'string') {
-      const cached = methodCache[method];
-      if (cached !== undefined) {
-        methodKey = cached;
-      } else {
+    switch (method) {
+      case 'GET':
+      case 'POST':
+      case 'PUT':
+      case 'PATCH':
+      case 'DELETE':
+      case 'HEAD':
+      case 'OPTIONS':
+      case '*':
+        methodKey = method;
+        break;
+      default:
         methodKey = normalizeMethod(method);
-      }
-    } else {
-      methodKey = normalizeMethod(method);
+        break;
     }
     let pathStr: string;
-    if (typeof path === 'string') {
-      if (path === '' || path === '/') {
-        pathStr = '/';
-      } else {
-        pathStr = path.charCodeAt(0) === 47 ? path : `/${path}`;
-      }
+    if (path.length === 0) {
+      pathStr = '/';
+    } else if (path.charCodeAt(0) === 47) {
+      pathStr = path;
     } else {
-      pathStr = normalizePath(path);
+      pathStr = '/' + path;
     }
     let methodMap: Record<string, RouteMatch | null> | undefined;
     switch (methodKey) {
