@@ -71,7 +71,16 @@ export class Router {
     } else {
       methodKey = normalizeMethod(method);
     }
-    const pathStr = normalizePath(path);
+    let pathStr: string;
+    if (typeof path === 'string') {
+      if (path === '' || path === '/') {
+        pathStr = '/';
+      } else {
+        pathStr = path.charCodeAt(0) === 47 ? path : `/${path}`;
+      }
+    } else {
+      pathStr = normalizePath(path);
+    }
     const methodMap = this._cache.get(methodKey);
     const cached = methodMap?.get(pathStr);
     if (cached !== undefined) {
