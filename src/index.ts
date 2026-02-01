@@ -6,9 +6,6 @@ export interface RouteMatch {
   store?: any;
 }
 
-export interface RouterOptions {
-  rebalanceInterval?: number;
-}
 
 interface RouteHandlerRecord {
   handler: RouteHandler;
@@ -39,16 +36,9 @@ class RouteNode {
 }
 
 export class Router {
-  private readonly options: Required<RouterOptions>;
   private readonly _root = new RouteNode();
-  private _lookupCount = 0;
 
-  constructor(options: RouterOptions = {}) {
-    this.options = {
-      rebalanceInterval: 1000,
-      ...options,
-    };
-  }
+  constructor() {}
 
   on(method: string | string[], path: string | RegExp, handler: RouteHandler, store?: any): this {
     const methods = Array.isArray(method) ? method : [method];
@@ -66,11 +56,6 @@ export class Router {
     const methodKey = normalizeMethod(method);
     const pathStr = normalizePath(path);
     const segments = splitPath(pathStr);
-    this._lookupCount += 1;
-    if (this.options.rebalanceInterval > 0 && this._lookupCount % this.options.rebalanceInterval === 0) {
-      this.rebalance();
-    }
-
     const match = this._walk(this._root, segments, 0, methodKey, pathStr, {});
     if (!match && methodKey !== '*') {
       return this._walk(this._root, segments, 0, '*', pathStr, {});
@@ -267,8 +252,8 @@ export class Router {
   }
 }
 
-export function createRouter(options?: RouterOptions): Router {
-  return new Router(options);
+export function createRouter(): Router {
+  return new Router();
 }
 
 function normalizeMethod(method: string): string {

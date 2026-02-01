@@ -46,12 +46,20 @@ const lookups = [
 ];
 
 function buildBalancingRouter() {
-  const router = createRouter({ rebalanceInterval: 0 });
+  const router = createRouter();
   for (const [method, path, handler] of routeFixtures) {
     router.on(method, path, handler);
   }
   router.on("GET", /^\/api\/v\d+\/health$/, () => {});
-  return (method, path) => router.find(method, path);
+  let counter = 0;
+  return (method, path) => {
+    const result = router.find(method, path);
+    counter += 1;
+    if (counter % 2000 === 0) {
+      router.rebalance();
+    }
+    return result;
+  };
 }
 
 function buildFindMyWay() {

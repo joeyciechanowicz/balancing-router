@@ -72,7 +72,7 @@ test('falls back to method wildcard', () => {
 });
 
 test('rebalances dynamic children by hits', () => {
-  const router = createRouter({ rebalanceInterval: 0 });
+  const router = createRouter();
   const handlerA = () => 'a';
   const handlerB = () => 'b';
 
