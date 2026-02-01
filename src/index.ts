@@ -37,6 +37,9 @@ class RouteNode {
 
 export class Router {
   private readonly _root = new RouteNode();
+  private readonly _cache = new Map<string, RouteMatch | null>();
+  private _cacheKeys: string[] = [];
+  private _cacheLimit = 1024;
 
   constructor() {}
 
@@ -55,12 +58,19 @@ export class Router {
   find(method: string, path: string): RouteMatch | null {
     const methodKey = normalizeMethod(method);
     const pathStr = normalizePath(path);
+    const cacheKey = `${methodKey} ${pathStr}`;
+    const cached = this._cache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
     const segments = splitPath(pathStr);
     const match = this._walk(this._root, segments, 0, methodKey, pathStr, {});
-    if (!match && methodKey !== '*') {
-      return this._walk(this._root, segments, 0, '*', pathStr, {});
+    let resolved = match;
+    if (!resolved && methodKey !== '*') {
+      resolved = this._walk(this._root, segments, 0, '*', pathStr, {});
     }
-    return match;
+    this._cacheSet(cacheKey, resolved);
+    return resolved;
   }
 
   rebalance(): void {
@@ -270,6 +280,15 @@ export class Router {
   ): void {
     const key = normalizeMethod(method);
     target.handlers.set(key, { handler, store, hits: 0 });
+  }
+
+  private _cacheSet(key: string, value: RouteMatch | null): void {
+    if (this._cache.size >= this._cacheLimit) {
+      const oldest = this._cacheKeys.shift();
+      if (oldest !== undefined) this._cache.delete(oldest);
+    }
+    this._cacheKeys.push(key);
+    this._cache.set(key, value);
   }
 }
 
