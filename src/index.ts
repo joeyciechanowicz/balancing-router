@@ -38,9 +38,10 @@ class RouteNode {
 
 export class Router {
   private readonly _root = new RouteNode();
-  private readonly _cache = new Map<string, RouteMatch | null>();
-  private _cacheKeys: string[] = [];
+  private readonly _cache = new Map<string, Map<string, RouteMatch | null>>();
+  private _cacheKeys: Array<{ method: string; path: string }> = [];
   private _cacheLimit = 1024;
+  private _cacheSize = 0;
 
   constructor() {}
 
@@ -59,8 +60,8 @@ export class Router {
   find(method: string, path: string): RouteMatch | null {
     const methodKey = normalizeMethod(method);
     const pathStr = normalizePath(path);
-    const cacheKey = `${methodKey} ${pathStr}`;
-    const cached = this._cache.get(cacheKey);
+    const methodCache = this._cache.get(methodKey);
+    const cached = methodCache?.get(pathStr);
     if (cached !== undefined) {
       return cached;
     }
@@ -70,7 +71,7 @@ export class Router {
     if (!resolved && methodKey !== '*') {
       resolved = this._walk(this._root, segments, 0, '*', pathStr, {});
     }
-    this._cacheSet(cacheKey, resolved);
+    this._cacheSet(methodKey, pathStr, resolved);
     return resolved;
   }
 
@@ -347,13 +348,30 @@ export class Router {
     target.handlers.set(key, { handler, store, hits: 0 });
   }
 
-  private _cacheSet(key: string, value: RouteMatch | null): void {
-    if (this._cache.size >= this._cacheLimit) {
-      const oldest = this._cacheKeys.shift();
-      if (oldest !== undefined) this._cache.delete(oldest);
+  private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
+    let methodCache = this._cache.get(method);
+    if (!methodCache) {
+      methodCache = new Map();
+      this._cache.set(method, methodCache);
     }
-    this._cacheKeys.push(key);
-    this._cache.set(key, value);
+    if (methodCache.has(path)) {
+      methodCache.set(path, value);
+      return;
+    }
+    if (this._cacheSize >= this._cacheLimit) {
+      const oldest = this._cacheKeys.shift();
+      if (oldest) {
+        const oldMethodCache = this._cache.get(oldest.method);
+        if (oldMethodCache) {
+          oldMethodCache.delete(oldest.path);
+          if (oldMethodCache.size === 0) this._cache.delete(oldest.method);
+          this._cacheSize = Math.max(0, this._cacheSize - 1);
+        }
+      }
+    }
+    this._cacheKeys.push({ method, path });
+    methodCache.set(path, value);
+    this._cacheSize += 1;
   }
 }
 
