@@ -97,6 +97,46 @@ test('normalizes paths without a leading slash', () => {
   assert.equal(match.handler, noop);
 });
 
+test('normalizes method casing and trims whitespace', () => {
+  const router = createRouter();
+  router.on('get', '/case', noop);
+
+  const match = router.find('  GeT  ', '/case');
+  assert.ok(match);
+  assert.equal(match.handler, noop);
+});
+
+test('wildcard param captures empty when path ends at wildcard node', () => {
+  const router = createRouter();
+  router.on('GET', '/files/:path*', noop);
+
+  const match = router.find('GET', '/files');
+  assert.ok(match);
+  assert.deepEqual({ ...match.params }, { path: '' });
+});
+
+test('prioritizes static over param and wildcard', () => {
+  const router = createRouter();
+  const staticHandler = () => 'static';
+  const paramHandler = () => 'param';
+  const wildcardHandler = () => 'wildcard';
+
+  router.on('GET', '/items/all', staticHandler);
+  router.on('GET', '/items/:id', paramHandler);
+  router.on('GET', '/items/:rest*', wildcardHandler);
+
+  const match = router.find('GET', '/items/all');
+  assert.equal(match?.handler, staticHandler);
+});
+
+test('regex routes do not match when pattern fails', () => {
+  const router = createRouter();
+  router.on('GET', /^\/api\/v\d+\/health$/, noop);
+
+  const match = router.find('GET', '/api/vx/health');
+  assert.equal(match, null);
+});
+
 test('stores route metadata', () => {
   const router = createRouter();
   const store = { feature: 'beta' };
