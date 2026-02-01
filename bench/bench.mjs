@@ -9,6 +9,9 @@ const root = resolve(here, "..");
 
 const args = new Set(process.argv.slice(2));
 const jsonOutput = args.has("--json");
+const timeIndex = process.argv.indexOf("--time");
+const timeArg = timeIndex !== -1 ? Number(process.argv[timeIndex + 1]) : null;
+const benchTime = Number.isFinite(timeArg) && timeArg > 0 ? timeArg : 1000;
 const routerPathIndex = process.argv.indexOf("--router");
 const routerPath =
   routerPathIndex !== -1 ? process.argv[routerPathIndex + 1] : null;
@@ -85,7 +88,7 @@ function buildTrouter() {
 }
 
 async function runBenchmarks() {
-  const bench = new Bench({ time: 200 });
+  const bench = new Bench({ time: benchTime });
   const warmupRounds = 50000;
 
   const routers = [
@@ -115,6 +118,7 @@ async function runBenchmarks() {
     name: task.name,
     hz: task.result?.hz ?? 0,
     samples: task.result?.samples?.length ?? 0,
+    rme: task.result?.rme ?? 0,
   }));
 }
 
@@ -124,7 +128,7 @@ if (jsonOutput) {
 } else {
   for (const result of results) {
     console.log(
-      `${result.name}: ${Math.round(result.hz).toLocaleString()} ops/sec (samples: ${result.samples})`,
+      `${result.name}: ${Math.round(result.hz).toLocaleString()} ops/sec (samples: ${result.samples}, rme: ${result.rme.toFixed(2)}%)`,
     );
   }
 }
