@@ -137,6 +137,36 @@ test('regex routes do not match when pattern fails', () => {
   assert.equal(match, null);
 });
 
+test('matches root path', () => {
+  const router = createRouter();
+  router.on('GET', '/', noop);
+
+  const match = router.find('GET', '/');
+  assert.ok(match);
+  assert.equal(match.handler, noop);
+});
+
+test('wildcard consumes the rest of the path', () => {
+  const router = createRouter();
+  router.on('GET', '/a/:first*/b/:second*', noop);
+
+  const match = router.find('GET', '/a/one/two/b/three/four');
+  assert.ok(match);
+  assert.deepEqual({ ...match.params }, { first: 'one/two/b/three/four' });
+});
+
+test('prefers method-specific handler over method wildcard', () => {
+  const router = createRouter();
+  const anyHandler = () => 'any';
+  const getHandler = () => 'get';
+
+  router.on('*', '/status', anyHandler);
+  router.on('GET', '/status', getHandler);
+
+  const match = router.find('GET', '/status');
+  assert.equal(match?.handler, getHandler);
+});
+
 test('stores route metadata', () => {
   const router = createRouter();
   const store = { feature: 'beta' };
