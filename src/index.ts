@@ -32,6 +32,7 @@ class RouteNode {
   paramChildren: DynamicChild[] = [];
   wildcardChildren: DynamicChild[] = [];
   regexRoutes: RegexRoute[] = [];
+  regexMinDepths: number[] = [];
   handlers = new Map<string, RouteHandlerRecord>();
 }
 
@@ -126,6 +127,7 @@ export class Router {
     const lastSlash = prefix.lastIndexOf('/');
     const safePrefix = lastSlash > 0 ? prefix.slice(0, lastSlash) : prefix;
     const prefixSegments = splitPath(safePrefix);
+    const minDepth = prefixSegments.length;
     let node = this._root;
     for (const segment of prefixSegments) {
       node = this._ensureStaticChild(node, segment);
@@ -139,6 +141,7 @@ export class Router {
         hits: 0,
       };
       node.regexRoutes.push(existing);
+      node.regexMinDepths.push(minDepth);
     }
     this._registerHandler(existing, methodKey, handler, store);
   }
@@ -221,7 +224,9 @@ export class Router {
     }
 
     if (node.regexRoutes.length) {
-      for (const route of node.regexRoutes) {
+      for (let i = 0; i < node.regexRoutes.length; i += 1) {
+        if (node.regexMinDepths[i] > segments.length) continue;
+        const route = node.regexRoutes[i];
         if (!route.regex.test(pathStr)) continue;
         const handlerRecord = route.handlers.get(method);
         if (!handlerRecord) continue;
