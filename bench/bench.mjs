@@ -70,43 +70,6 @@ function getRequest(method, path) {
   return request;
 }
 
-const stringRouteFixtures = [
-  ["GET", "/users", () => {}],
-  ["GET", "/users/:id", () => {}],
-  ["GET", "/users/:id/settings", () => {}],
-  ["GET", "/some/url/:arg", () => {}],
-  ["GET", "/assets/:path*", () => {}],
-  ["GET", "/health", () => {}],
-  ["GET", "/search/:query", () => {}],
-  ["GET", "/products", () => {}],
-  ["GET", "/products/:productId", () => {}],
-  ["GET", "/products/:productId/reviews", () => {}],
-  ["GET", "/reports/:id", () => {}],
-  ["GET", "/categories/:categoryId/products", () => {}],
-  ["GET", "/orders/:orderId", () => {}],
-  ["GET", "/orders/:orderId/items/:itemId", () => {}],
-  ["GET", "/blog/:year/:month/:slug", () => {}],
-  ["GET", "/api/v1/users/:id", () => {}],
-  ["GET", "/api/v2/users/:id/settings", () => {}],
-  ["POST", "/users", () => {}],
-  ["POST", "/orders", () => {}],
-  ["PUT", "/products/:productId", () => {}],
-  ["PATCH", "/users/:id", () => {}],
-  ["DELETE", "/users/:id", () => {}],
-  ["DELETE", "/orders/:orderId", () => {}],
-];
-const regexRouteFixtures = [
-  ["GET", /^\/api\/v\d+\/health$/, () => {}],
-  ["GET", /^\/some\/url-[a-z]+$/, () => {}],
-  ["GET", /^\/reports-\d+$/, () => {}],
-  ["GET", /^\/products-\d+$/, () => {}],
-  ["GET", /^\/blog-\d{4}-\d{2}-[a-z-]+$/, () => {}],
-];
-const shuffledStringFixtures = shuffle(
-  [...stringRouteFixtures],
-  createRng(seed ^ 0x6b43a9d6),
-);
-
 const userIds = ["1", "42", "123", "999", "1001"];
 const productIds = ["10", "200", "1234", "7777", "9090"];
 const orderIds = ["500", "600", "700", "800"];
@@ -121,6 +84,180 @@ const apiVersions = ["1", "2", "10", "42"];
 const reportIds = ["1", "7", "42", "900"];
 const urlArgs = ["alpha", "bravo", "charlie"];
 
+const routeDefinitions = [
+  { method: "GET", pattern: "/users", weight: 15, makePath: () => "/users" },
+  {
+    method: "GET",
+    pattern: "/users/:id",
+    weight: 10,
+    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/users/:id/settings",
+    weight: 5,
+    makePath: (rng) => `/users/${pick(userIds, rng)}/settings`,
+  },
+  {
+    method: "GET",
+    pattern: "/some/url/:arg",
+    weight: 3,
+    makePath: (rng) => `/some/url/${pick(urlArgs, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: /^\/some\/url-[a-z]+$/,
+    weight: 2,
+    makePath: (rng) => `/some/url-${pick(urlArgs, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/reports/:id",
+    weight: 2,
+    makePath: (rng) => `/reports/${pick(reportIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: /^\/reports-\d+$/,
+    weight: 2,
+    makePath: (rng) => `/reports-${pick(reportIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: /^\/products-\d+$/,
+    weight: 2,
+    makePath: (rng) => `/products-${pick(productIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: /^\/api\/v\d+\/health$/,
+    weight: 2,
+    makePath: (rng) => `/api/v${pick(apiVersions, rng)}/health`,
+  },
+  {
+    method: "GET",
+    pattern: "/api/v1/users/:id",
+    weight: 5,
+    makePath: (rng) => `/api/v1/users/${pick(userIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/api/v2/users/:id/settings",
+    weight: 2,
+    makePath: (rng) => `/api/v2/users/${pick(userIds, rng)}/settings`,
+  },
+  {
+    method: "PATCH",
+    pattern: "/users/:id",
+    weight: 5,
+    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+  },
+  {
+    method: "DELETE",
+    pattern: "/users/:id",
+    weight: 5,
+    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/assets/:path*",
+    weight: 5,
+    makePath: (rng) => `/assets/${pick(assetFiles, rng)}`,
+  },
+  { method: "GET", pattern: "/health", weight: 5, makePath: () => "/health" },
+  {
+    method: "GET",
+    pattern: "/search/:query",
+    weight: 5,
+    makePath: (rng) => `/search/${pick(searchTerms, rng)}`,
+  },
+  { method: "POST", pattern: "/users", weight: 5, makePath: () => "/users" },
+  {
+    method: "POST",
+    pattern: "/orders",
+    weight: 3,
+    makePath: () => "/orders",
+  },
+  {
+    method: "GET",
+    pattern: "/products",
+    weight: 3,
+    makePath: () => "/products",
+  },
+  {
+    method: "GET",
+    pattern: "/products/:productId",
+    weight: 4,
+    makePath: (rng) => `/products/${pick(productIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/products/:productId/reviews",
+    weight: 3,
+    makePath: (rng) => `/products/${pick(productIds, rng)}/reviews`,
+  },
+  {
+    method: "PUT",
+    pattern: "/products/:productId",
+    weight: 2,
+    makePath: (rng) => `/products/${pick(productIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/orders/:orderId",
+    weight: 2,
+    makePath: (rng) => `/orders/${pick(orderIds, rng)}`,
+  },
+  {
+    method: "DELETE",
+    pattern: "/orders/:orderId",
+    weight: 1,
+    makePath: (rng) => `/orders/${pick(orderIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/orders/:orderId/items/:itemId",
+    weight: 1,
+    makePath: (rng) =>
+      `/orders/${pick(orderIds, rng)}/items/${pick(itemIds, rng)}`,
+  },
+  {
+    method: "GET",
+    pattern: "/blog/:year/:month/:slug",
+    weight: 1,
+    makePath: (rng) =>
+      `/blog/${pick(years, rng)}/${pick(months, rng)}/${pick(slugs, rng)}`,
+  },
+];
+
+const defaultHandler = () => {};
+const stringRouteFixtures = routeDefinitions
+  .filter((route) => typeof route.pattern === "string")
+  .map((route) => [route.method, route.pattern, defaultHandler]);
+const regexRouteFixtures = routeDefinitions
+  .filter((route) => route.pattern instanceof RegExp)
+  .map((route) => [route.method, route.pattern, defaultHandler]);
+const shuffledStringFixtures = shuffle(
+  [...stringRouteFixtures],
+  createRng(seed ^ 0x6b43a9d6),
+);
+
+function buildWeightedRoutes(definitions) {
+  let totalWeight = 0;
+  const entries = definitions.map((route) => {
+    totalWeight += route.weight;
+    return { ...route, cumulative: totalWeight };
+  });
+  return { entries, totalWeight };
+}
+
+const weightedRoutes = {
+  all: buildWeightedRoutes(routeDefinitions),
+  stringOnly: buildWeightedRoutes(
+    routeDefinitions.filter((route) => typeof route.pattern === "string"),
+  ),
+};
+
 function tryRegisterRegexRoutes(register) {
   try {
     for (const [method, path, handler] of regexRouteFixtures) {
@@ -132,47 +269,20 @@ function tryRegisterRegexRoutes(register) {
   }
 }
 
-function makeLookup(rng, includeRegex) {
-  const roll = rng();
-  if (roll < 0.15) return ["GET", "/users"];
-  if (roll < 0.25) return ["GET", `/users/${pick(userIds, rng)}`];
-  if (roll < 0.3) return ["GET", `/users/${pick(userIds, rng)}/settings`];
-  if (roll < 0.33) return ["GET", `/some/url/${pick(urlArgs, rng)}`];
-  if (includeRegex && roll < 0.35)
-    return ["GET", `/some/url-${pick(urlArgs, rng)}`];
-  if (roll < 0.37) return ["GET", `/reports/${pick(reportIds, rng)}`];
-  if (includeRegex && roll < 0.39)
-    return ["GET", `/reports-${pick(reportIds, rng)}`];
-  if (includeRegex && roll < 0.41)
-    return ["GET", `/products-${pick(productIds, rng)}`];
-  if (includeRegex && roll < 0.43)
-    return ["GET", `/api/v${pick(apiVersions, rng)}/health`];
-  if (roll < 0.48) return ["GET", `/api/v1/users/${pick(userIds, rng)}`];
-  if (roll < 0.5)
-    return ["GET", `/api/v2/users/${pick(userIds, rng)}/settings`];
-  if (roll < 0.55) return ["PATCH", `/users/${pick(userIds, rng)}`];
-  if (roll < 0.6) return ["DELETE", `/users/${pick(userIds, rng)}`];
-  if (roll < 0.65) return ["GET", `/assets/${pick(assetFiles, rng)}`];
-  if (roll < 0.7) return ["GET", "/health"];
-  if (roll < 0.75) return ["GET", `/search/${pick(searchTerms, rng)}`];
-  if (roll < 0.8) return ["POST", "/users"];
-  if (roll < 0.83) return ["POST", "/orders"];
-  if (roll < 0.86) return ["GET", "/products"];
-  if (roll < 0.9) return ["GET", `/products/${pick(productIds, rng)}`];
-  if (roll < 0.93) return ["GET", `/products/${pick(productIds, rng)}/reviews`];
-  if (roll < 0.95) return ["PUT", `/products/${pick(productIds, rng)}`];
-  if (roll < 0.97) return ["GET", `/orders/${pick(orderIds, rng)}`];
-  if (roll < 0.98) return ["DELETE", `/orders/${pick(orderIds, rng)}`];
-  if (roll < 0.99) {
-    return [
-      "GET",
-      `/orders/${pick(orderIds, rng)}/items/${pick(itemIds, rng)}`,
-    ];
+function pickWeightedRoute(table, rng) {
+  const roll = rng() * table.totalWeight;
+  for (const entry of table.entries) {
+    if (roll < entry.cumulative) return entry;
   }
-  return [
-    "GET",
-    `/blog/${pick(years, rng)}/${pick(months, rng)}/${pick(slugs, rng)}`,
-  ];
+  return table.entries[table.entries.length - 1];
+}
+
+function createLookup(rng, includeRegex) {
+  const table = includeRegex ? weightedRoutes.all : weightedRoutes.stringOnly;
+  return () => {
+    const route = pickWeightedRoute(table, rng);
+    return [route.method, route.makePath(rng)];
+  };
 }
 
 function buildBalancingRouter() {
@@ -542,26 +652,29 @@ async function runBenchmarks() {
     for (const [name, routerEntry] of routers) {
       const { lookup, warmup } = routerEntry;
       const includeRegex = routerEntry.supportsRegex === true;
+      const nextLookup = createLookup(lookupRng, includeRegex);
+      const benchLookup = asyncMode
+        ? async () => {
+            const [method, path] = nextLookup();
+            await lookup(method, path, getRequest(method, path));
+          }
+        : () => {
+            const [method, path] = nextLookup();
+            lookup(method, path);
+          };
       for (let i = 0; i < warmupRounds; i += 1) {
-        const [method, path] = makeLookup(lookupRng, includeRegex);
         if (asyncMode) {
-          await lookup(method, path, getRequest(method, path));
+          await benchLookup();
         } else {
-          lookup(method, path);
+          benchLookup();
         }
       }
       if (warmup) warmup();
       bench(
         name,
-        asyncMode
-          ? async () => {
-              const [method, path] = makeLookup(lookupRng, includeRegex);
-              await lookup(method, path, getRequest(method, path));
-            }
-          : () => {
-              const [method, path] = makeLookup(lookupRng, includeRegex);
-              lookup(method, path);
-            },
+        async function* () {
+          yield benchLookup;
+        },
       );
     }
     await run({ format: "mitata" });
@@ -571,25 +684,28 @@ async function runBenchmarks() {
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
     const includeRegex = routerEntry.supportsRegex === true;
+    const nextLookup = createLookup(lookupRng, includeRegex);
+    const benchLookup = asyncMode
+      ? async () => {
+          const [method, path] = nextLookup();
+          await lookup(method, path, getRequest(method, path));
+        }
+      : () => {
+          const [method, path] = nextLookup();
+          lookup(method, path);
+        };
     for (let i = 0; i < warmupRounds; i += 1) {
-      const [method, path] = makeLookup(lookupRng, includeRegex);
       if (asyncMode) {
-        await lookup(method, path, getRequest(method, path));
+        await benchLookup();
       } else {
-        lookup(method, path);
+        benchLookup();
       }
     }
     if (warmup) warmup();
     const stats = await measure(
-      asyncMode
-        ? async () => {
-            const [method, path] = makeLookup(lookupRng, includeRegex);
-            await lookup(method, path, getRequest(method, path));
-          }
-        : () => {
-            const [method, path] = makeLookup(lookupRng, includeRegex);
-            lookup(method, path);
-          },
+      async function* () {
+        yield benchLookup;
+      },
       { min_cpu_time: benchTime * 1e6 },
     );
 
