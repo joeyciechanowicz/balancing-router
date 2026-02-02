@@ -44,6 +44,7 @@ export class Router {
   private _cacheKeys: Array<{ method: string; path: string }> = [];
   private _cacheLimit = 1024;
   private _cacheSize = 0;
+  private _cacheIndex = 0;
   private _cacheGET?: Record<string, RouteMatch | null>;
   private _cachePOST?: Record<string, RouteMatch | null>;
   private _cachePUT?: Record<string, RouteMatch | null>;
@@ -124,11 +125,11 @@ export class Router {
     }
     const segments = splitPath(pathStr);
     const depth = segments.length;
-    const restCache = buildRestCache(segments, depth);
-    const match = this._walk(this._root, segments, restCache, depth, 0, methodKey, pathStr, null);
+    const restCacheRef = { value: null as string[] | null };
+    const match = this._walk(this._root, segments, restCacheRef, depth, 0, methodKey, pathStr, null);
     let resolved = match;
     if (!resolved && methodKey !== '*') {
-      resolved = this._walk(this._root, segments, restCache, depth, 0, '*', pathStr, null);
+      resolved = this._walk(this._root, segments, restCacheRef, depth, 0, '*', pathStr, null);
     }
     this._cacheSet(methodKey, pathStr, resolved);
     return resolved;
@@ -209,7 +210,7 @@ export class Router {
   private _walk(
     node: RouteNode,
     segments: string[],
-    restCache: string[],
+    restCacheRef: { value: string[] | null },
     depth: number,
     index: number,
     method: string,
@@ -230,7 +231,7 @@ export class Router {
       | { type: 'regex'; node: RouteNode };
 
     const stack: WalkFrame[] = [{ type: 'visit', node, index }];
-    const dynamicPath: DynamicChild[] = [];
+    let dynamicPath: DynamicChild[] | null = null;
 
     while (stack.length) {
       const frame = stack.pop()!;
@@ -245,7 +246,10 @@ export class Router {
         continue;
       }
       if (frame.type === 'popDynamic') {
-        dynamicPath.pop();
+        if (dynamicPath) {
+          dynamicPath.pop();
+          if (dynamicPath.length === 0) dynamicPath = null;
+        }
         continue;
       }
       if (frame.type === 'regex') {
@@ -258,7 +262,9 @@ export class Router {
             if (!handlerRecord) continue;
             route.hits += 1;
             handlerRecord.hits += 1;
-            for (const child of dynamicPath) child.hits += 1;
+            if (dynamicPath) {
+              for (const child of dynamicPath) child.hits += 1;
+            }
             return {
               handler: handlerRecord.handler,
               params: params ?? EMPTY_PARAMS,
@@ -274,6 +280,7 @@ export class Router {
         paramsRef[frame.paramName] = frame.paramValue as string;
       }
       if (frame.dynamicChild) {
+        if (!dynamicPath) dynamicPath = [];
         dynamicPath.push(frame.dynamicChild);
       }
 
@@ -284,7 +291,9 @@ export class Router {
         const handlerRecord = currentNode.handlers.get(method);
         if (handlerRecord) {
           handlerRecord.hits += 1;
-          for (const child of dynamicPath) child.hits += 1;
+          if (dynamicPath) {
+            for (const child of dynamicPath) child.hits += 1;
+          }
           return {
             handler: handlerRecord.handler,
             params: params ?? EMPTY_PARAMS,
@@ -325,6 +334,7 @@ export class Router {
       const segment = segments[idx];
 
       if (currentNode.wildcardChildren.length) {
+        const restCache = restCacheRef.value ?? (restCacheRef.value = buildRestCache(segments, depth));
         const rest = restCache[idx];
         for (let i = currentNode.wildcardChildren.length - 1; i >= 0; i -= 1) {
           const child = currentNode.wildcardChildren[i];
@@ -429,19 +439,25 @@ export class Router {
       methodCache[path] = value;
       return;
     }
-    if (this._cacheSize >= this._cacheLimit) {
-      const oldest = this._cacheKeys.shift();
+    if (this._cacheLimit <= 0) {
+      methodCache[path] = value;
+      return;
+    }
+    if (this._cacheSize < this._cacheLimit) {
+      this._cacheKeys.push({ method, path });
+      this._cacheSize += 1;
+    } else {
+      const oldest = this._cacheKeys[this._cacheIndex];
       if (oldest) {
         const oldMethodCache = this._getMethodCache(oldest.method);
         if (oldMethodCache) {
           delete oldMethodCache[oldest.path];
-          this._cacheSize = Math.max(0, this._cacheSize - 1);
         }
       }
+      this._cacheKeys[this._cacheIndex] = { method, path };
+      this._cacheIndex = (this._cacheIndex + 1) % this._cacheLimit;
     }
-    this._cacheKeys.push({ method, path });
     methodCache[path] = value;
-    this._cacheSize += 1;
   }
 
   private _getMethodCache(method: string): Record<string, RouteMatch | null> | undefined {
