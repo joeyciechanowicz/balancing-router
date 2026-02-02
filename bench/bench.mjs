@@ -70,10 +70,10 @@ function getRequest(method, path) {
   return request;
 }
 
-const userIds = ["1", "42", "123", "999", "1001"];
-const productIds = ["10", "200", "1234", "7777", "9090"];
-const orderIds = ["500", "600", "700", "800"];
-const itemIds = ["1", "2", "3"];
+const userIds = Array.from({ length: 2048 }, (_, i) => String(i + 1));
+const productIds = Array.from({ length: 1024 }, (_, i) => String(10000 + i));
+const orderIds = Array.from({ length: 512 }, (_, i) => String(500 + i));
+const itemIds = Array.from({ length: 16 }, (_, i) => String(i + 1));
 const slugs = ["hello-world", "node-routing", "perf-tips"];
 const months = ["01", "02", "12"];
 const categories = ["books", "tech", "home"];
@@ -81,152 +81,182 @@ const years = ["2023", "2024"];
 const assetFiles = ["css/app.css", "js/app.js", "img/logo.png"];
 const searchTerms = ["node", "router", "http", "perf"];
 const apiVersions = ["1", "2", "10", "42"];
-const reportIds = ["1", "7", "42", "900"];
+const reportIds = Array.from({ length: 256 }, (_, i) => String(i + 1));
 const urlArgs = ["alpha", "bravo", "charlie"];
 
+const userPaths = userIds.map((id) => `/users/${id}`);
+const userSettingsPaths = userIds.map((id) => `/users/${id}/settings`);
+const someUrlPaths = urlArgs.map((arg) => `/some/url/${arg}`);
+const someUrlRegexPaths = urlArgs.map((arg) => `/some/url-${arg}`);
+const reportPaths = reportIds.map((id) => `/reports/${id}`);
+const reportRegexPaths = reportIds.map((id) => `/reports-${id}`);
+const productRegexPaths = productIds.map((id) => `/products-${id}`);
+const apiHealthPaths = apiVersions.map((version) => `/api/v${version}/health`);
+const apiV1UserPaths = userIds.map((id) => `/api/v1/users/${id}`);
+const apiV2UserSettingsPaths = userIds.map(
+  (id) => `/api/v2/users/${id}/settings`,
+);
+const assetPaths = assetFiles.map((asset) => `/assets/${asset}`);
+const searchPaths = searchTerms.map((term) => `/search/${term}`);
+const productPaths = productIds.map((id) => `/products/${id}`);
+const productReviewPaths = productIds.map((id) => `/products/${id}/reviews`);
+const orderPaths = orderIds.map((id) => `/orders/${id}`);
+const orderItemPaths = [];
+for (const orderId of orderIds) {
+  for (const itemId of itemIds) {
+    orderItemPaths.push(`/orders/${orderId}/items/${itemId}`);
+  }
+}
+const blogPaths = [];
+for (const year of years) {
+  for (const month of months) {
+    for (const slug of slugs) {
+      blogPaths.push(`/blog/${year}/${month}/${slug}`);
+    }
+  }
+}
+
 const routeDefinitions = [
-  { method: "GET", pattern: "/users", weight: 15, makePath: () => "/users" },
+  { method: "GET", pattern: "/users", weight: 15, paths: ["/users"] },
   {
     method: "GET",
     pattern: "/users/:id",
     weight: 10,
-    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+    paths: userPaths,
   },
   {
     method: "GET",
     pattern: "/users/:id/settings",
     weight: 5,
-    makePath: (rng) => `/users/${pick(userIds, rng)}/settings`,
+    paths: userSettingsPaths,
   },
   {
     method: "GET",
     pattern: "/some/url/:arg",
     weight: 3,
-    makePath: (rng) => `/some/url/${pick(urlArgs, rng)}`,
+    paths: someUrlPaths,
   },
   {
     method: "GET",
     pattern: /^\/some\/url-[a-z]+$/,
     weight: 2,
-    makePath: (rng) => `/some/url-${pick(urlArgs, rng)}`,
+    paths: someUrlRegexPaths,
   },
   {
     method: "GET",
     pattern: "/reports/:id",
     weight: 2,
-    makePath: (rng) => `/reports/${pick(reportIds, rng)}`,
+    paths: reportPaths,
   },
   {
     method: "GET",
     pattern: /^\/reports-\d+$/,
     weight: 2,
-    makePath: (rng) => `/reports-${pick(reportIds, rng)}`,
+    paths: reportRegexPaths,
   },
   {
     method: "GET",
     pattern: /^\/products-\d+$/,
     weight: 2,
-    makePath: (rng) => `/products-${pick(productIds, rng)}`,
+    paths: productRegexPaths,
   },
   {
     method: "GET",
     pattern: /^\/api\/v\d+\/health$/,
     weight: 2,
-    makePath: (rng) => `/api/v${pick(apiVersions, rng)}/health`,
+    paths: apiHealthPaths,
   },
   {
     method: "GET",
     pattern: "/api/v1/users/:id",
     weight: 5,
-    makePath: (rng) => `/api/v1/users/${pick(userIds, rng)}`,
+    paths: apiV1UserPaths,
   },
   {
     method: "GET",
     pattern: "/api/v2/users/:id/settings",
     weight: 2,
-    makePath: (rng) => `/api/v2/users/${pick(userIds, rng)}/settings`,
+    paths: apiV2UserSettingsPaths,
   },
   {
     method: "PATCH",
     pattern: "/users/:id",
     weight: 5,
-    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+    paths: userPaths,
   },
   {
     method: "DELETE",
     pattern: "/users/:id",
     weight: 5,
-    makePath: (rng) => `/users/${pick(userIds, rng)}`,
+    paths: userPaths,
   },
   {
     method: "GET",
     pattern: "/assets/:path*",
     weight: 5,
-    makePath: (rng) => `/assets/${pick(assetFiles, rng)}`,
+    paths: assetPaths,
   },
-  { method: "GET", pattern: "/health", weight: 5, makePath: () => "/health" },
+  { method: "GET", pattern: "/health", weight: 5, paths: ["/health"] },
   {
     method: "GET",
     pattern: "/search/:query",
     weight: 5,
-    makePath: (rng) => `/search/${pick(searchTerms, rng)}`,
+    paths: searchPaths,
   },
-  { method: "POST", pattern: "/users", weight: 5, makePath: () => "/users" },
+  { method: "POST", pattern: "/users", weight: 5, paths: ["/users"] },
   {
     method: "POST",
     pattern: "/orders",
     weight: 3,
-    makePath: () => "/orders",
+    paths: ["/orders"],
   },
   {
     method: "GET",
     pattern: "/products",
     weight: 3,
-    makePath: () => "/products",
+    paths: ["/products"],
   },
   {
     method: "GET",
     pattern: "/products/:productId",
     weight: 4,
-    makePath: (rng) => `/products/${pick(productIds, rng)}`,
+    paths: productPaths,
   },
   {
     method: "GET",
     pattern: "/products/:productId/reviews",
     weight: 3,
-    makePath: (rng) => `/products/${pick(productIds, rng)}/reviews`,
+    paths: productReviewPaths,
   },
   {
     method: "PUT",
     pattern: "/products/:productId",
     weight: 2,
-    makePath: (rng) => `/products/${pick(productIds, rng)}`,
+    paths: productPaths,
   },
   {
     method: "GET",
     pattern: "/orders/:orderId",
     weight: 2,
-    makePath: (rng) => `/orders/${pick(orderIds, rng)}`,
+    paths: orderPaths,
   },
   {
     method: "DELETE",
     pattern: "/orders/:orderId",
     weight: 1,
-    makePath: (rng) => `/orders/${pick(orderIds, rng)}`,
+    paths: orderPaths,
   },
   {
     method: "GET",
     pattern: "/orders/:orderId/items/:itemId",
     weight: 1,
-    makePath: (rng) =>
-      `/orders/${pick(orderIds, rng)}/items/${pick(itemIds, rng)}`,
+    paths: orderItemPaths,
   },
   {
     method: "GET",
     pattern: "/blog/:year/:month/:slug",
     weight: 1,
-    makePath: (rng) =>
-      `/blog/${pick(years, rng)}/${pick(months, rng)}/${pick(slugs, rng)}`,
+    paths: blogPaths,
   },
 ];
 
@@ -281,9 +311,10 @@ function createLookup(rng, includeRegex) {
   const table = includeRegex ? weightedRoutes.all : weightedRoutes.stringOnly;
   return () => {
     const route = pickWeightedRoute(table, rng);
-    return [route.method, route.makePath(rng)];
+    return [route.method, pick(route.paths, rng)];
   };
 }
+
 
 function buildBalancingRouter() {
   const router = createRouter();
