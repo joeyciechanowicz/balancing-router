@@ -83,6 +83,20 @@ const routeFixtures = routeDefinitions.map((route) => [
   route.path,
   defaultHandler,
 ]);
+function toFrameworkSafePath(path) {
+  return path.replace(/:([A-Za-z0-9_]+)\([^)]*\)/g, ":$1");
+}
+const frameworkPatternSet = new Set();
+for (const route of routeDefinitions) {
+  for (const concretePath of route.concretePaths) {
+    frameworkPatternSet.add(toFrameworkSafePath(concretePath));
+  }
+}
+const frameworkRouteFixtures = [...frameworkPatternSet].map((path) => [
+  METHOD,
+  path,
+  defaultHandler,
+]);
 
 function createRouteMatcher(concretePatterns) {
   const router = createRouter();
@@ -301,7 +315,7 @@ function buildHono() {
   try {
     const { Hono } = require("hono");
     const app = new Hono();
-    for (const [method, path] of routeFixtures) {
+    for (const [method, path] of frameworkRouteFixtures) {
       app.on(method, path, () => new Response(null));
     }
     return {
@@ -379,7 +393,7 @@ function buildKoaRouter() {
     const Router = require("@koa/router");
     const app = new Koa();
     const router = new Router();
-    for (const [method, path] of routeFixtures) {
+    for (const [method, path] of frameworkRouteFixtures) {
       const koaPath = toPathToRegexpPattern(path);
       router[method.toLowerCase()](koaPath, (ctx) => {
         ctx.status = 200;
@@ -459,7 +473,13 @@ async function runBenchmarks() {
   const routers = [];
   for (const [name, build] of routerBuilders) {
     if (onlyName && name !== onlyName) continue;
-    const entry = await build();
+    let entry = null;
+    try {
+      entry = await build();
+    } catch (error) {
+      logBuildError(name, error);
+      continue;
+    }
     if (!entry) continue;
     routers.push([name, entry]);
   }

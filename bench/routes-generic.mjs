@@ -90,14 +90,10 @@ const baseRoutes = [
     generateUrl: (rng) => withBaseAndOptionalLocale(rng),
   },
   {
-    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/lists/:group?/:list?/:category?",
+    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/lists/:group/:list/:category",
     count: 250_000,
     generateUrl: (rng) => {
-      let path = `${withBaseAndOptionalLocale(rng)}/lists`;
-      if (rng() < 0.7) path += `/${pick(flowGroups, rng)}`;
-      if (rng() < 0.6) path += `/${pick(pages, rng)}`;
-      if (rng() < 0.5) path += `/${pick(categories, rng)}`;
-      return path;
+      return `${withBaseAndOptionalLocale(rng)}/lists/${pick(flowGroups, rng)}/${pick(pages, rng)}/${pick(categories, rng)}`;
     },
   },
   {
@@ -129,10 +125,10 @@ const baseRoutes = [
       `${withBaseAndOptionalLocale(rng)}/requests/${randomId(rng)}/handoff`,
   },
   {
-    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/requests/:requestId(\\d{4}-\\d{4}-\\d{2,4}|\\d+)",
+    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/requests/id/:requestId(\\d{4}-\\d{4}-\\d{2,4}|\\d+)",
     count: 1,
     generateUrl: (rng) =>
-      `${withBaseAndOptionalLocale(rng)}/requests/${rng() < 0.5 ? pick(requestTokens, rng) : randomId(rng)}`,
+      `${withBaseAndOptionalLocale(rng)}/requests/id/${rng() < 0.5 ? pick(requestTokens, rng) : randomId(rng)}`,
   },
   {
     path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/requests/:requestId/retry",
@@ -181,7 +177,7 @@ const baseRoutes = [
     generateUrl: (rng) => `${withBaseAndOptionalLocale(rng)}/offers`,
   },
   {
-    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/offers/:list(.+)",
+    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/offers/:list",
     count: 1,
     generateUrl: (rng) =>
       `${withBaseAndOptionalLocale(rng)}/offers/${pick(pages, rng)}-${pick(categories, rng)}`,
@@ -200,7 +196,7 @@ const baseRoutes = [
     generateUrl: (rng) => `${withBaseAndOptionalLocale(rng)}/discover`,
   },
   {
-    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/browse/:categories(.+)",
+    path: "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/browse/:categories",
     count: 913_000,
     generateUrl: (rng) =>
       `${withBaseAndOptionalLocale(rng)}/browse/${pick(categories, rng)}-${pick(categories, rng)}`,
@@ -243,13 +239,10 @@ const baseRoutes = [
       `${withBaseAndOptionalLocale(rng)}/region/${pick(regions, rng)}`,
   },
   {
-    path: "/01/:gtin/:batchCode?/:lotNumber?",
+    path: "/01/:gtin/:batchCode/:lotNumber",
     count: 0,
     generateUrl: (rng) => {
-      let path = `/01/${randomId(rng)}`;
-      if (rng() < 0.7) path += `/${randomId(rng)}`;
-      if (rng() < 0.5) path += `/${randomId(rng)}`;
-      return path;
+      return `/01/${randomId(rng)}/${randomId(rng)}/${randomId(rng)}`;
     },
   },
   {
@@ -265,13 +258,13 @@ const baseRoutes = [
       `/guides${rng() < 0.5 ? `/${pick(locales, rng)}` : ""}`,
   },
   {
-    path: "/portal/:locale([a-z]{2}-[A-Z]{2})?/vendor/:vendorName(.+)",
+    path: "/portal/:locale([a-z]{2}-[A-Z]{2})?/vendor/:vendorName",
     count: 4_920,
     generateUrl: (rng) =>
       `/portal${rng() < 0.5 ? `/${pick(locales, rng)}` : ""}/vendor/${pick(categories, rng)}-${pick(categories, rng)}`,
   },
   {
-    path: "/portal/:locale([a-z]{2}-[A-Z]{2})?/collection/:categories(.+)",
+    path: "/portal/:locale([a-z]{2}-[A-Z]{2})?/collection/:categories",
     count: 1,
     generateUrl: (rng) =>
       `/portal${rng() < 0.5 ? `/${pick(locales, rng)}` : ""}/collection/${pick(categories, rng)}-${pick(categories, rng)}`,
