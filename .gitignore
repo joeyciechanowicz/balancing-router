@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 # Local benchmark route modules
 bench/routes.local.mjs
 bench/routes-specific.mjs
+bench/routes-specific.urls.mjs

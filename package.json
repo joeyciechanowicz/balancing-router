@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test",
     "bench": "node bench/bench.mjs",
+    "bench:static": "scripts/bench/run-static-bench.sh",
     "bench:compare": "node scripts/bench/compare.mjs",
     "profile:router": "node --prof scripts/profile-router.mjs"
   },

@@ -551,6 +551,8 @@ export function createRouter(): Router {
   return new Router();
 }
 
+export { createAutomatonRouter } from './automaton-router';
+
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 
 function buildRestCache(segments: string[], depth: number): string[] {

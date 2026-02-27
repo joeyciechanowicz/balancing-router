@@ -1,3 +1,11 @@
+let concretePathsByPath = null;
+try {
+  const staticModule = await import("./routes-generic.static.mjs");
+  concretePathsByPath = staticModule.concretePathsByPath ?? null;
+} catch {
+  concretePathsByPath = null;
+}
+
 const baseOption = ["catalog", "portal"];
 const locales = ["en-GB", "en-US", "de-DE", "fr-FR"];
 const categories = ["alpha", "beta", "gamma", "delta", "omega"];
@@ -286,6 +294,18 @@ const baseRoutes = [
 export const routes = baseRoutes.map((route) => ({
   path: route.path,
   count: Number(route.count),
-  concretePaths: expandPathPattern(route.path),
+  concretePaths: concretePathsByPath?.[route.path] ?? expandPathPattern(route.path),
   generateUrl: route.generateUrl,
 }));
+
+let precomputedUrls = null;
+try {
+  const module = await import("./routes-generic.urls.mjs");
+  if (Array.isArray(module.precomputedUrls)) {
+    precomputedUrls = module.precomputedUrls;
+  }
+} catch {
+  // Optional static corpus file; generated on demand.
+}
+
+export { precomputedUrls };

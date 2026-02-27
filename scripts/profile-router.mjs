@@ -4,7 +4,12 @@ import { routes } from '../bench/routes-generic.mjs';
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
-const { createRouter } = require(resolve(root, 'dist', 'index.js'));
+const routerModule = require(resolve(root, 'dist', 'index.js'));
+const routerFactoryName = process.env.PROFILE_ROUTER_FACTORY || 'createRouter';
+const createRouter = routerModule[routerFactoryName];
+if (typeof createRouter !== 'function') {
+  throw new Error(`Unknown router factory: ${routerFactoryName}`);
+}
 
 function createRng(initial) {
   let value = initial >>> 0;

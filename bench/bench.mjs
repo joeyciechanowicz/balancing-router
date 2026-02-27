@@ -2,7 +2,7 @@ import { bench, measure, run } from "mitata";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { routes } from "./routes.mjs";
+import { routes, precomputedUrls } from "./routes.mjs";
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,7 +51,7 @@ function loadRouter() {
   return require(resolve(root, "dist", "index.js"));
 }
 
-const { createRouter } = loadRouter();
+const { createRouter, createAutomatonRouter } = loadRouter();
 function logBuildError(name, error) {
   const message = error && error.stack ? error.stack : String(error);
   console.error(`[bench] ${name} setup failed:\n${message}`);
@@ -173,10 +173,9 @@ function createCorpusLookup(paths) {
 }
 
 validateRouteDefinitions(routeDefinitions);
-const fullRequestCorpus = buildRequestCorpus(
-  routeDefinitions,
-  createRng(seed ^ 0x0fedcba1),
-);
+const fullRequestCorpus = precomputedUrls
+  ? precomputedUrls.map((path) => normalizeLookupPath(path))
+  : buildRequestCorpus(routeDefinitions, createRng(seed ^ 0x0fedcba1));
 
 function buildBalancingRouter() {
   const router = createRouter();
@@ -188,6 +187,19 @@ function buildBalancingRouter() {
       return router.find(method, path);
     },
     warmup: () => router.rebalance(),
+  };
+}
+
+function buildBalancingRouterV2() {
+  if (typeof createAutomatonRouter !== "function") return null;
+  const router = createAutomatonRouter();
+  for (const [method, path, handler] of routeFixtures) {
+    router.on(method, path, handler);
+  }
+  return {
+    lookup: (method, path) => {
+      return router.find(method, path);
+    },
   };
 }
 
@@ -458,6 +470,7 @@ async function runBenchmarks() {
 
   const routerBuilders = [
     ["balancing-router", () => buildBalancingRouter()],
+    ["balancing-router-v2", () => buildBalancingRouterV2()],
     ["find-my-way", () => buildFindMyWay()],
     ["trouter", () => buildTrouter()],
     ["radix3", () => buildRadix3()],
