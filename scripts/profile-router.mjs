@@ -1,94 +1,72 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import { routes } from '../bench/routes-generic.mjs';
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
 const { createRouter } = require(resolve(root, 'dist', 'index.js'));
 
-const routeFixtures = [
-  ['GET', '/users', () => {}],
-  ['GET', '/users/:id', () => {}],
-  ['GET', '/users/:id/settings', () => {}],
-  ['GET', '/assets/:path*', () => {}],
-  ['GET', '/health', () => {}],
-  ['GET', '/search/:query', () => {}],
-  ['GET', '/products', () => {}],
-  ['GET', '/products/:productId', () => {}],
-  ['GET', '/products/:productId/reviews', () => {}],
-  ['GET', '/categories/:categoryId/products', () => {}],
-  ['GET', '/orders/:orderId', () => {}],
-  ['GET', '/orders/:orderId/items/:itemId', () => {}],
-  ['GET', '/blog/:year/:month/:slug', () => {}],
-  ['GET', '/api/v1/users/:id', () => {}],
-  ['GET', '/api/v2/users/:id/settings', () => {}],
-  ['POST', '/users', () => {}],
-  ['POST', '/orders', () => {}],
-  ['PUT', '/products/:productId', () => {}],
-  ['PATCH', '/users/:id', () => {}],
-  ['DELETE', '/users/:id', () => {}],
-  ['DELETE', '/orders/:orderId', () => {}],
-];
-
-const lookups = [];
-const userIds = ['1', '42', '123', '999', '1001'];
-const productIds = ['10', '200', '1234', '7777', '9090'];
-const orderIds = ['500', '600', '700', '800'];
-const itemIds = ['1', '2', '3'];
-const slugs = ['hello-world', 'node-routing', 'perf-tips'];
-const months = ['01', '02', '12'];
-
-lookups.push(['GET', '/users']);
-for (const id of userIds) {
-  lookups.push(['GET', `/users/${id}`]);
-  lookups.push(['GET', `/users/${id}/settings`]);
-  lookups.push(['GET', `/api/v1/users/${id}`]);
-  lookups.push(['GET', `/api/v2/users/${id}/settings`]);
-  lookups.push(['PATCH', `/users/${id}`]);
-  lookups.push(['DELETE', `/users/${id}`]);
-}
-lookups.push(['GET', '/assets/css/app.css']);
-lookups.push(['GET', '/assets/js/app.js']);
-lookups.push(['GET', '/assets/img/logo.png']);
-lookups.push(['GET', '/health']);
-lookups.push(['GET', '/search/node']);
-lookups.push(['GET', '/search/router']);
-lookups.push(['POST', '/users']);
-lookups.push(['POST', '/orders']);
-
-lookups.push(['GET', '/products']);
-for (const id of productIds) {
-  lookups.push(['GET', `/products/${id}`]);
-  lookups.push(['GET', `/products/${id}/reviews`]);
-  lookups.push(['PUT', `/products/${id}`]);
+function createRng(initial) {
+  let value = initial >>> 0;
+  return () => {
+    value |= 0;
+    value = (value + 0x6d2b79f5) | 0;
+    let t = Math.imul(value ^ (value >>> 15), 1 | value);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-for (const id of orderIds) {
-  lookups.push(['GET', `/orders/${id}`]);
-  lookups.push(['DELETE', `/orders/${id}`]);
-  for (const itemId of itemIds) {
-    lookups.push(['GET', `/orders/${id}/items/${itemId}`]);
+function normalizeLookupPath(path) {
+  if (!path) return '/';
+  if (path.charCodeAt(0) === 47) return path;
+  return `/${path}`;
+}
+
+function buildWeightedRoutes(definitions) {
+  const entries = [];
+  let totalWeight = 0;
+  for (const route of definitions) {
+    if (!route || typeof route.generateUrl !== 'function') continue;
+    const weight = Number(route.count) > 0 ? Number(route.count) : 1;
+    totalWeight += weight;
+    entries.push({
+      path: route.path,
+      generateUrl: route.generateUrl,
+      cumulative: totalWeight,
+    });
   }
+  return { entries, totalWeight };
 }
 
-for (const categoryId of ['books', 'tech', 'home']) {
-  lookups.push(['GET', `/categories/${categoryId}/products`]);
-}
-
-for (const year of ['2023', '2024']) {
-  for (const month of months) {
-    for (const slug of slugs) {
-      lookups.push(['GET', `/blog/${year}/${month}/${slug}`]);
-    }
+function pickWeightedRoute(weighted, rng) {
+  const roll = rng() * weighted.totalWeight;
+  for (const route of weighted.entries) {
+    if (roll < route.cumulative) return route;
   }
+  return weighted.entries[weighted.entries.length - 1];
+}
+
+function buildLookups(definitions, rng, count) {
+  const weighted = buildWeightedRoutes(definitions);
+  const lookups = new Array(count);
+  for (let i = 0; i < count; i += 1) {
+    const route = pickWeightedRoute(weighted, rng);
+    lookups[i] = ['GET', normalizeLookupPath(route.generateUrl(rng))];
+  }
+  return lookups;
 }
 
 const router = createRouter();
-for (const [method, path, handler] of routeFixtures) {
-  router.on(method, path, handler);
+for (const route of routes) {
+  router.on('GET', route.path, () => {});
 }
-router.on('GET', /^\/api\/v\d+\/health$/, () => {});
 
+const seed = Number(process.env.PROFILE_SEED ?? Date.now());
+const lookupsPerIteration = Number(process.env.PROFILE_LOOKUPS ?? 128);
+const lookups = buildLookups(routes, createRng(seed ^ 0x9e3779b9), lookupsPerIteration);
 const iterations = Number(process.env.PROFILE_ITERS ?? 200000);
+
 for (let i = 0; i < iterations; i += 1) {
   for (let j = 0; j < lookups.length; j += 1) {
     const entry = lookups[j];
