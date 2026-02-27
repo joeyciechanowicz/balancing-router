@@ -74,6 +74,7 @@ interface MethodAutomaton {
 const DYN_PARAM = 1;
 const DYN_WILDCARD = 2;
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
+const methodCache = Object.create(null) as Record<string, string>;
 
 export class AutomatonRouter {
   private readonly _routes: RouteDef[] = [];
@@ -89,6 +90,12 @@ export class AutomatonRouter {
   private _capStack: number[] = [0];
   private _capNameIds: number[] = [0];
   private _capValues: string[] = [''];
+  private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
+  private _cacheOther = new Map<string, Record<string, RouteMatch | null>>();
+  private _cacheKeys: Array<{ method: string; path: string }> = [];
+  private _cacheLimit = 1_000_000;
+  private _cacheSize = 0;
+  private _cacheIndex = 0;
 
   on(method: string | string[], path: string | RegExp, handler: RouteHandler, store?: any): this {
     const methods = Array.isArray(method) ? method : [method];
@@ -107,8 +114,29 @@ export class AutomatonRouter {
 
   find(method: string, path: string): RouteMatch | null {
     this._ensureCompiled();
+
+    const pathStr = path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
+
+    if (method === 'GET') {
+      const cached = this._cacheGET[pathStr];
+      if (cached !== undefined) return cached;
+      const resolved = this._findResolved('GET', pathStr);
+      this._cacheSet('GET', pathStr, resolved);
+      return resolved;
+    }
+
     const methodKey = normalizeMethod(method);
-    const pathStr = normalizePath(path);
+    const methodCacheEntry = this._getMethodCache(methodKey);
+    if (methodCacheEntry) {
+      const cached = methodCacheEntry[pathStr];
+      if (cached !== undefined) return cached;
+    }
+    const resolved = this._findResolved(methodKey, pathStr);
+    this._cacheSet(methodKey, pathStr, resolved);
+    return resolved;
+  }
+
+  private _findResolved(methodKey: string, pathStr: string): RouteMatch | null {
     const segments = splitPath(pathStr);
 
     const methodAutomaton = this._automata.get(methodKey);
@@ -264,6 +292,11 @@ export class AutomatonRouter {
   private _ensureCompiled(): void {
     if (this._compiled) return;
     this._compile();
+    this._cacheGET = Object.create(null);
+    this._cacheOther.clear();
+    this._cacheKeys = [];
+    this._cacheSize = 0;
+    this._cacheIndex = 0;
     this._compiled = true;
   }
 
@@ -492,6 +525,44 @@ export class AutomatonRouter {
     this._validatorCache.set(pattern, id);
     return id;
   }
+
+  private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
+    if (this._cacheLimit <= 0) return;
+    const methodCacheEntry = this._getOrCreateMethodCache(method);
+    if (methodCacheEntry[path] !== undefined) {
+      methodCacheEntry[path] = value;
+      return;
+    }
+    if (this._cacheSize < this._cacheLimit) {
+      this._cacheKeys.push({ method, path });
+      this._cacheSize += 1;
+    } else {
+      const oldest = this._cacheKeys[this._cacheIndex];
+      if (oldest) {
+        const oldCache = this._getMethodCache(oldest.method);
+        if (oldCache) {
+          delete oldCache[oldest.path];
+        }
+      }
+      this._cacheKeys[this._cacheIndex] = { method, path };
+      this._cacheIndex = (this._cacheIndex + 1) % this._cacheLimit;
+    }
+    methodCacheEntry[path] = value;
+  }
+
+  private _getMethodCache(method: string): Record<string, RouteMatch | null> | undefined {
+    if (method === 'GET') return this._cacheGET;
+    return this._cacheOther.get(method);
+  }
+
+  private _getOrCreateMethodCache(method: string): Record<string, RouteMatch | null> {
+    if (method === 'GET') return this._cacheGET;
+    const existing = this._cacheOther.get(method);
+    if (existing) return existing;
+    const created = Object.create(null) as Record<string, RouteMatch | null>;
+    this._cacheOther.set(method, created);
+    return created;
+  }
 }
 
 export function createAutomatonRouter(): AutomatonRouter {
@@ -520,6 +591,14 @@ function scoreEdge(kind: 'param' | 'wildcard', validatorKind: ValidatorEntry['ki
 
 function normalizeMethod(method: string): string {
   if (method == null) return '*';
+  if (typeof method === 'string') {
+    const cached = methodCache[method];
+    if (cached !== undefined) return cached;
+    const value = method.trim();
+    const normalized = value === '' ? '*' : value.toUpperCase();
+    methodCache[method] = normalized;
+    return normalized;
+  }
   const value = String(method).trim();
   return value === '' ? '*' : value.toUpperCase();
 }
