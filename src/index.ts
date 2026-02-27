@@ -42,7 +42,7 @@ export class Router {
   private readonly _root = new RouteNode();
   private readonly _cache = new Map<string, Record<string, RouteMatch | null>>();
   private _cacheKeys: Array<{ method: string; path: string }> = [];
-  private _cacheLimit = 1024;
+  private _cacheLimit = 65536;
   private _cacheSize = 0;
   private _cacheIndex = 0;
   private _cacheGET?: Record<string, RouteMatch | null>;
@@ -92,36 +92,38 @@ export class Router {
     } else {
       pathStr = '/' + path;
     }
-    let methodMap: Record<string, RouteMatch | null> | undefined;
-    switch (methodKey) {
-      case 'GET':
-        methodMap = this._cacheGET;
-        break;
-      case 'POST':
-        methodMap = this._cachePOST;
-        break;
-      case 'PUT':
-        methodMap = this._cachePUT;
-        break;
-      case 'PATCH':
-        methodMap = this._cachePATCH;
-        break;
-      case 'DELETE':
-        methodMap = this._cacheDELETE;
-        break;
-      case 'HEAD':
-        methodMap = this._cacheHEAD;
-        break;
-      case 'OPTIONS':
-        methodMap = this._cacheOPTIONS;
-        break;
-      default:
-        methodMap = this._cache.get(methodKey);
-        break;
-    }
-    const cached = methodMap ? methodMap[pathStr] : undefined;
-    if (cached !== undefined) {
-      return cached;
+    if (this._cacheLimit > 0) {
+      let methodMap: Record<string, RouteMatch | null> | undefined;
+      switch (methodKey) {
+        case 'GET':
+          methodMap = this._cacheGET;
+          break;
+        case 'POST':
+          methodMap = this._cachePOST;
+          break;
+        case 'PUT':
+          methodMap = this._cachePUT;
+          break;
+        case 'PATCH':
+          methodMap = this._cachePATCH;
+          break;
+        case 'DELETE':
+          methodMap = this._cacheDELETE;
+          break;
+        case 'HEAD':
+          methodMap = this._cacheHEAD;
+          break;
+        case 'OPTIONS':
+          methodMap = this._cacheOPTIONS;
+          break;
+        default:
+          methodMap = this._cache.get(methodKey);
+          break;
+      }
+      const cached = methodMap ? methodMap[pathStr] : undefined;
+      if (cached !== undefined) {
+        return cached;
+      }
     }
     const segments = splitPath(pathStr);
     const depth = segments.length;
@@ -434,12 +436,9 @@ export class Router {
   }
 
   private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
+    if (this._cacheLimit <= 0) return;
     let methodCache = this._getOrCreateMethodCache(method);
     if (methodCache[path] !== undefined) {
-      methodCache[path] = value;
-      return;
-    }
-    if (this._cacheLimit <= 0) {
       methodCache[path] = value;
       return;
     }
