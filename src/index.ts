@@ -45,7 +45,7 @@ export class Router {
   private _cacheLimit = 65536;
   private _cacheSize = 0;
   private _cacheIndex = 0;
-  private _cacheGET?: Record<string, RouteMatch | null>;
+  private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
   private _cachePOST?: Record<string, RouteMatch | null>;
   private _cachePUT?: Record<string, RouteMatch | null>;
   private _cachePATCH?: Record<string, RouteMatch | null>;
@@ -84,7 +84,7 @@ export class Router {
       pathStr = '/' + path;
     }
     if (this._cacheLimit > 0) {
-      const cached = this._cacheGET ? this._cacheGET[pathStr] : undefined;
+      const cached = this._cacheGET[pathStr];
       if (cached !== undefined) {
         return cached;
       }
@@ -516,8 +516,7 @@ export class Router {
   private _getOrCreateMethodCache(method: string): Record<string, RouteMatch | null> {
     switch (method) {
       case 'GET':
-        if (!this._cacheGET) this._cacheGET = Object.create(null);
-        return this._cacheGET!;
+        return this._cacheGET;
       case 'POST':
         if (!this._cachePOST) this._cachePOST = Object.create(null);
         return this._cachePOST!;
