@@ -83,3 +83,5 @@ server.listen(3000);
 - Tests: `npm test`
 - Benchmarks: `npm run bench`
 - Compare to previous commit: `npm run bench:compare`
+- Benchmarks replay a prebuilt, shuffled URL corpus generated from per-route `count` values in `bench/routes.mjs`.
+- Rebalancing (for `balancing-router`) happens in warmup only, not during timed measurement.

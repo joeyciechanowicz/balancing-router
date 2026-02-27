@@ -140,3 +140,7 @@ vite.config.ts.timestamp-*
 
 # Profile data
 *.cpuprofile
+
+# Local benchmark route modules
+bench/routes.local.mjs
+bench/routes-specific.mjs

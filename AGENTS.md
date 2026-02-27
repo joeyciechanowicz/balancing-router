@@ -32,6 +32,9 @@ This repo uses an iterative, benchmark- and profiler-driven workflow. Every perf
 - Default bench time is 1000ms per task; use `--time` for longer runs.
 - Always look at `rme` (relative margin of error) and samples.
 - If `rme` is high, increase time and rerun.
+- Bench traffic is generated from full route `count` values in `bench/routes.mjs`.
+- URL corpora are prebuilt and shuffled once before timing; timed runs replay the shuffled corpus.
+- URL generators must produce at least 2 valid variants per route.
 
 ## Bench Commands
 

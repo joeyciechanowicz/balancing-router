@@ -2,6 +2,7 @@ import { bench, measure, run } from "mitata";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { routes } from "./routes.mjs";
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,10 +43,6 @@ function shuffle(array, rng) {
   return array;
 }
 
-function pick(array, rng) {
-  return array[Math.floor(rng() * array.length)];
-}
-
 function loadRouter() {
   if (routerPath) {
     const routerRequire = createRequire(resolve(routerPath));
@@ -70,266 +67,113 @@ function getRequest(method, path) {
   return request;
 }
 
-const userIds = Array.from({ length: 2048 }, (_, i) => String(i + 1));
-const productIds = Array.from({ length: 1024 }, (_, i) => String(10000 + i));
-const orderIds = Array.from({ length: 512 }, (_, i) => String(500 + i));
-const itemIds = Array.from({ length: 16 }, (_, i) => String(i + 1));
-const slugs = ["hello-world", "node-routing", "perf-tips"];
-const months = ["01", "02", "12"];
-const categories = ["books", "tech", "home"];
-const years = ["2023", "2024"];
-const assetFiles = ["css/app.css", "js/app.js", "img/logo.png"];
-const searchTerms = ["node", "router", "http", "perf"];
-const apiVersions = ["1", "2", "10", "42"];
-const reportIds = Array.from({ length: 256 }, (_, i) => String(i + 1));
-const urlArgs = ["alpha", "bravo", "charlie"];
+const METHOD = "GET";
 
-const userPaths = userIds.map((id) => `/users/${id}`);
-const userSettingsPaths = userIds.map((id) => `/users/${id}/settings`);
-const someUrlPaths = urlArgs.map((arg) => `/some/url/${arg}`);
-const someUrlRegexPaths = urlArgs.map((arg) => `/some/url-${arg}`);
-const reportPaths = reportIds.map((id) => `/reports/${id}`);
-const reportRegexPaths = reportIds.map((id) => `/reports-${id}`);
-const productRegexPaths = productIds.map((id) => `/products-${id}`);
-const apiHealthPaths = apiVersions.map((version) => `/api/v${version}/health`);
-const apiV1UserPaths = userIds.map((id) => `/api/v1/users/${id}`);
-const apiV2UserSettingsPaths = userIds.map(
-  (id) => `/api/v2/users/${id}/settings`,
-);
-const assetPaths = assetFiles.map((asset) => `/assets/${asset}`);
-const searchPaths = searchTerms.map((term) => `/search/${term}`);
-const productPaths = productIds.map((id) => `/products/${id}`);
-const productReviewPaths = productIds.map((id) => `/products/${id}/reviews`);
-const orderPaths = orderIds.map((id) => `/orders/${id}`);
-const orderItemPaths = [];
-for (const orderId of orderIds) {
-  for (const itemId of itemIds) {
-    orderItemPaths.push(`/orders/${orderId}/items/${itemId}`);
-  }
-}
-const blogPaths = [];
-for (const year of years) {
-  for (const month of months) {
-    for (const slug of slugs) {
-      blogPaths.push(`/blog/${year}/${month}/${slug}`);
-    }
-  }
+function normalizeLookupPath(path) {
+  if (!path) return "/";
+  if (path.charCodeAt(0) === 47) return path;
+  return `/${path}`;
 }
 
-const routeDefinitions = [
-  { method: "GET", pattern: "/users", weight: 15, paths: ["/users"] },
-  {
-    method: "GET",
-    pattern: "/users/:id",
-    weight: 10,
-    paths: userPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/users/:id/settings",
-    weight: 5,
-    paths: userSettingsPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/some/url/:arg",
-    weight: 3,
-    paths: someUrlPaths,
-  },
-  {
-    method: "GET",
-    pattern: /^\/some\/url-[a-z]+$/,
-    weight: 2,
-    paths: someUrlRegexPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/reports/:id",
-    weight: 2,
-    paths: reportPaths,
-  },
-  {
-    method: "GET",
-    pattern: /^\/reports-\d+$/,
-    weight: 2,
-    paths: reportRegexPaths,
-  },
-  {
-    method: "GET",
-    pattern: /^\/products-\d+$/,
-    weight: 2,
-    paths: productRegexPaths,
-  },
-  {
-    method: "GET",
-    pattern: /^\/api\/v\d+\/health$/,
-    weight: 2,
-    paths: apiHealthPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/api/v1/users/:id",
-    weight: 5,
-    paths: apiV1UserPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/api/v2/users/:id/settings",
-    weight: 2,
-    paths: apiV2UserSettingsPaths,
-  },
-  {
-    method: "PATCH",
-    pattern: "/users/:id",
-    weight: 5,
-    paths: userPaths,
-  },
-  {
-    method: "DELETE",
-    pattern: "/users/:id",
-    weight: 5,
-    paths: userPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/assets/:path*",
-    weight: 5,
-    paths: assetPaths,
-  },
-  { method: "GET", pattern: "/health", weight: 5, paths: ["/health"] },
-  {
-    method: "GET",
-    pattern: "/search/:query",
-    weight: 5,
-    paths: searchPaths,
-  },
-  { method: "POST", pattern: "/users", weight: 5, paths: ["/users"] },
-  {
-    method: "POST",
-    pattern: "/orders",
-    weight: 3,
-    paths: ["/orders"],
-  },
-  {
-    method: "GET",
-    pattern: "/products",
-    weight: 3,
-    paths: ["/products"],
-  },
-  {
-    method: "GET",
-    pattern: "/products/:productId",
-    weight: 4,
-    paths: productPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/products/:productId/reviews",
-    weight: 3,
-    paths: productReviewPaths,
-  },
-  {
-    method: "PUT",
-    pattern: "/products/:productId",
-    weight: 2,
-    paths: productPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/orders/:orderId",
-    weight: 2,
-    paths: orderPaths,
-  },
-  {
-    method: "DELETE",
-    pattern: "/orders/:orderId",
-    weight: 1,
-    paths: orderPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/orders/:orderId/items/:itemId",
-    weight: 1,
-    paths: orderItemPaths,
-  },
-  {
-    method: "GET",
-    pattern: "/blog/:year/:month/:slug",
-    weight: 1,
-    paths: blogPaths,
-  },
-];
+const routeDefinitions = routes;
 
 const defaultHandler = () => {};
-const stringRouteFixtures = routeDefinitions
-  .filter((route) => typeof route.pattern === "string")
-  .map((route) => [route.method, route.pattern, defaultHandler]);
-const regexRouteFixtures = routeDefinitions
-  .filter((route) => route.pattern instanceof RegExp)
-  .map((route) => [route.method, route.pattern, defaultHandler]);
-const shuffledStringFixtures = shuffle(
-  [...stringRouteFixtures],
-  createRng(seed ^ 0x6b43a9d6),
-);
+const routeFixtures = routeDefinitions.map((route) => [
+  METHOD,
+  route.path,
+  defaultHandler,
+]);
 
-function buildWeightedRoutes(definitions) {
-  let totalWeight = 0;
-  const entries = definitions.map((route) => {
-    totalWeight += route.weight;
-    return { ...route, cumulative: totalWeight };
-  });
-  return { entries, totalWeight };
+function createRouteMatcher(concretePatterns) {
+  const router = createRouter();
+  for (const pattern of concretePatterns) {
+    router.on(METHOD, pattern, defaultHandler);
+  }
+  return (path) => router.find(METHOD, path) !== null;
 }
 
-const weightedRoutes = {
-  all: buildWeightedRoutes(routeDefinitions),
-  stringOnly: buildWeightedRoutes(
-    routeDefinitions.filter((route) => typeof route.pattern === "string"),
-  ),
-};
-
-function tryRegisterRegexRoutes(register) {
-  try {
-    for (const [method, path, handler] of regexRouteFixtures) {
-      register(method, path, handler);
+function validateRouteDefinitions(definitions) {
+  const lowRng = () => 0.01;
+  const highRng = () => 0.99;
+  for (const route of definitions) {
+    if (!Number.isInteger(route.count) || route.count < 0) {
+      throw new Error(
+        `[bench] Invalid count for route ${String(route.path)}: ${route.count}`,
+      );
     }
-    return true;
-  } catch {
-    return false;
+    const matcher = createRouteMatcher(route.concretePaths);
+    const variants = new Set();
+    const rngs = [lowRng, highRng, createRng(seed ^ 0x17f12f3a)];
+    for (const rng of rngs) {
+      for (let i = 0; i < 32; i += 1) {
+        const raw = route.generateUrl(rng);
+        const normalized = normalizeLookupPath(raw);
+        if (!matcher(normalized)) {
+          throw new Error(
+            `[bench] Generator produced non-matching URL for route ${String(route.path)}: ${raw}`,
+          );
+        }
+        variants.add(raw);
+      }
+    }
+    if (variants.size < 2) {
+      throw new Error(
+        `[bench] Route ${String(route.path)} must generate at least 2 variants`,
+      );
+    }
   }
 }
 
-function pickWeightedRoute(table, rng) {
-  const roll = rng() * table.totalWeight;
-  for (const entry of table.entries) {
-    if (roll < entry.cumulative) return entry;
+function buildRequestCorpus(definitions, rng) {
+  let total = 0;
+  for (const route of definitions) total += route.count;
+  const paths = new Array(total);
+  const interned = new Map();
+  let index = 0;
+  for (const route of definitions) {
+    for (let i = 0; i < route.count; i += 1) {
+      const normalized = normalizeLookupPath(route.generateUrl(rng));
+      const stable = interned.get(normalized);
+      if (stable !== undefined) {
+        paths[index] = stable;
+      } else {
+        interned.set(normalized, normalized);
+        paths[index] = normalized;
+      }
+      index += 1;
+    }
   }
-  return table.entries[table.entries.length - 1];
+  shuffle(paths, rng);
+  return paths;
 }
 
-function createLookup(rng, includeRegex) {
-  const table = includeRegex ? weightedRoutes.all : weightedRoutes.stringOnly;
+function createCorpusLookup(paths) {
+  let index = 0;
+  const size = paths.length;
   return () => {
-    const route = pickWeightedRoute(table, rng);
-    return [route.method, pick(route.paths, rng)];
+    const path = paths[index];
+    index += 1;
+    if (index === size) index = 0;
+    return [METHOD, path];
   };
 }
 
+validateRouteDefinitions(routeDefinitions);
+const fullRequestCorpus = buildRequestCorpus(
+  routeDefinitions,
+  createRng(seed ^ 0x0fedcba1),
+);
 
 function buildBalancingRouter() {
   const router = createRouter();
-  for (const [method, path, handler] of shuffledStringFixtures) {
+  for (const [method, path, handler] of routeFixtures) {
     router.on(method, path, handler);
   }
-  const supportsRegex = tryRegisterRegexRoutes((method, path, handler) =>
-    router.on(method, path, handler),
-  );
   return {
     lookup: (method, path) => {
       return router.find(method, path);
     },
     warmup: () => router.rebalance(),
-    supportsRegex,
   };
 }
 
@@ -337,13 +181,10 @@ function buildFindMyWay() {
   try {
     const findMyWay = require("find-my-way");
     const router = findMyWay();
-    for (const [method, path, handler] of shuffledStringFixtures) {
+    for (const [method, path, handler] of routeFixtures) {
       router.on(method, path, handler);
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path, handler) =>
-      router.on(method, path, handler),
-    );
-    return { lookup: (method, path) => router.find(method, path), supportsRegex };
+    return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
     logBuildError("find-my-way", error);
     return null;
@@ -354,13 +195,10 @@ function buildTrouter() {
   try {
     const { Trouter } = require("trouter");
     const router = new Trouter();
-    for (const [method, path, handler] of shuffledStringFixtures) {
+    for (const [method, path, handler] of routeFixtures) {
       router.add(method, path, handler);
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path, handler) =>
-      router.add(method, path, handler),
-    );
-    return { lookup: (method, path) => router.find(method, path), supportsRegex };
+    return { lookup: (method, path) => router.find(method, path) };
   } catch (error) {
     logBuildError("trouter", error);
     return null;
@@ -372,7 +210,7 @@ function buildRadix3() {
     const { createRouter: createRadixRouter } = require("radix3");
     const router = createRadixRouter();
     const stores = new Map();
-    for (const [method, path, handler] of shuffledStringFixtures) {
+    for (const [method, path, handler] of routeFixtures) {
       let store = stores.get(path);
       if (!store) {
         store = Object.create(null);
@@ -381,22 +219,12 @@ function buildRadix3() {
       }
       store[method] = handler;
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path, handler) => {
-      let store = stores.get(path);
-      if (!store) {
-        store = Object.create(null);
-        router.insert(path, store);
-        stores.set(path, store);
-      }
-      store[method] = handler;
-    });
     return {
       lookup: (method, path) => {
         const match = router.lookup(path);
         if (!match) return null;
         return match[method] ?? match["*"] ?? null;
       },
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("radix3", error);
@@ -408,21 +236,16 @@ function buildMedleyRouter() {
   try {
     const Router = require("@medley/router");
     const router = new Router();
-    for (const [method, path, handler] of shuffledStringFixtures) {
+    for (const [method, path, handler] of routeFixtures) {
       const store = router.register(path);
       store[method] = handler;
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path, handler) => {
-      const store = router.register(path);
-      store[method] = handler;
-    });
     return {
       lookup: (method, path) => {
         const match = router.find(path);
         if (!match) return null;
         return match.store[method] ?? match.store["*"] ?? null;
       },
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("@medley/router", error);
@@ -434,21 +257,16 @@ function buildIttyRouter() {
   try {
     const { IttyRouter } = require("itty-router");
     const router = IttyRouter();
-    for (const [method, path, handler] of shuffledStringFixtures) {
+    for (const [method, path, handler] of routeFixtures) {
       const register = router[method.toLowerCase()] ?? router.all;
       register.call(router, path, handler);
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path, handler) => {
-      const register = router[method.toLowerCase()] ?? router.all;
-      register.call(router, path, handler);
-    });
     return {
       lookup: async (method, path, request) => {
         return router.fetch(request ?? getRequest(method, path));
       },
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("itty-router", error);
@@ -460,7 +278,7 @@ async function buildFastify() {
   try {
     const fastifyFactory = require("fastify");
     const fastify = fastifyFactory({ logger: false });
-    for (const [method, path] of shuffledStringFixtures) {
+    for (const [method, path] of routeFixtures) {
       fastify.route({
         method,
         url: path,
@@ -468,18 +286,10 @@ async function buildFastify() {
       });
     }
     await fastify.ready();
-    const supportsRegex = tryRegisterRegexRoutes((method, path) => {
-      fastify.route({
-        method,
-        url: path,
-        handler: () => "",
-      });
-    });
     return {
       lookup: (method, path) => fastify.inject({ method, url: path }),
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("fastify", error);
@@ -491,18 +301,14 @@ function buildHono() {
   try {
     const { Hono } = require("hono");
     const app = new Hono();
-    for (const [method, path] of shuffledStringFixtures) {
+    for (const [method, path] of routeFixtures) {
       app.on(method, path, () => new Response(null));
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path) => {
-      app.on(method, path, () => new Response(null));
-    });
     return {
       lookup: (method, path, request) =>
         app.request(request ?? path, request ? undefined : { method }),
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("hono", error);
@@ -520,7 +326,7 @@ function buildH3() {
     } = require("h3");
     const app = createApp();
     const router = createRouter();
-    for (const [method, path] of shuffledStringFixtures) {
+    for (const [method, path] of routeFixtures) {
       router[method.toLowerCase()](
         path,
         eventHandler(() => ""),
@@ -528,19 +334,12 @@ function buildH3() {
     }
     app.use(router);
     const handler = toWebHandler(app);
-    const supportsRegex = tryRegisterRegexRoutes((method, path) => {
-      router[method.toLowerCase()](
-        path,
-        eventHandler(() => ""),
-      );
-    });
     return {
       lookup: (method, path, request) => {
         return handler(request ?? getRequest(method, path));
       },
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("h3", error);
@@ -580,7 +379,7 @@ function buildKoaRouter() {
     const Router = require("@koa/router");
     const app = new Koa();
     const router = new Router();
-    for (const [method, path] of shuffledStringFixtures) {
+    for (const [method, path] of routeFixtures) {
       const koaPath = toPathToRegexpPattern(path);
       router[method.toLowerCase()](koaPath, (ctx) => {
         ctx.status = 200;
@@ -589,12 +388,6 @@ function buildKoaRouter() {
     }
     app.use(router.routes());
     const handler = app.callback();
-    const supportsRegex = tryRegisterRegexRoutes((method, path) => {
-      router[method.toLowerCase()](path, (ctx) => {
-        ctx.status = 200;
-        ctx.body = "";
-      });
-    });
     return {
       lookup: async (method, path) => {
         const { req, res } = createMockReqRes(method, path);
@@ -602,7 +395,6 @@ function buildKoaRouter() {
       },
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("@koa/router", error);
@@ -614,17 +406,12 @@ function buildTinyHttp() {
   try {
     const { App } = require("@tinyhttp/app");
     const app = new App();
-    for (const [method, path] of shuffledStringFixtures) {
+    for (const [method, path] of routeFixtures) {
       const tinyPath = toRegexparamPattern(path);
       app[method.toLowerCase()](tinyPath, (_req, res) => {
         res.status(200).end("");
       });
     }
-    const supportsRegex = tryRegisterRegexRoutes((method, path) => {
-      app[method.toLowerCase()](path, (_req, res) => {
-        res.status(200).end("");
-      });
-    });
     return {
       lookup: async (method, path) => {
         const { req, res } = createMockReqRes(method, path);
@@ -632,7 +419,6 @@ function buildTinyHttp() {
       },
       async: true,
       framework: true,
-      supportsRegex,
     };
   } catch (error) {
     logBuildError("@tinyhttp/app", error);
@@ -654,7 +440,6 @@ function calculateRme(samples) {
 
 async function runBenchmarks() {
   const warmupRounds = 50000;
-  const lookupRng = createRng(seed ^ 0x9e3779b9);
   const results = [];
 
   const routerBuilders = [
@@ -682,8 +467,7 @@ async function runBenchmarks() {
   if (!jsonOutput) {
     for (const [name, routerEntry] of routers) {
       const { lookup, warmup } = routerEntry;
-      const includeRegex = routerEntry.supportsRegex === true;
-      const nextLookup = createLookup(lookupRng, includeRegex);
+      const nextLookup = createCorpusLookup(fullRequestCorpus);
       const benchLookup = asyncMode
         ? async () => {
             const [method, path] = nextLookup();
@@ -701,12 +485,9 @@ async function runBenchmarks() {
         }
       }
       if (warmup) warmup();
-      bench(
-        name,
-        async function* () {
-          yield benchLookup;
-        },
-      );
+      bench(name, async function* () {
+        yield benchLookup;
+      });
     }
     await run({ format: "mitata" });
     return null;
@@ -714,8 +495,7 @@ async function runBenchmarks() {
 
   for (const [name, routerEntry] of routers) {
     const { lookup, warmup } = routerEntry;
-    const includeRegex = routerEntry.supportsRegex === true;
-    const nextLookup = createLookup(lookupRng, includeRegex);
+    const nextLookup = createCorpusLookup(fullRequestCorpus);
     const benchLookup = asyncMode
       ? async () => {
           const [method, path] = nextLookup();
