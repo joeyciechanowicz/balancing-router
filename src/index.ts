@@ -68,9 +68,42 @@ export class Router {
   }
 
   find(method: string, path: string): RouteMatch | null {
+    if (method === 'GET') {
+      return this._findGET(path);
+    }
+    return this._findGeneric(method, path);
+  }
+
+  private _findGET(path: string): RouteMatch | null {
+    let pathStr: string;
+    if (path.length === 0) {
+      pathStr = '/';
+    } else if (path.charCodeAt(0) === 47) {
+      pathStr = path;
+    } else {
+      pathStr = '/' + path;
+    }
+    if (this._cacheLimit > 0) {
+      const cached = this._cacheGET ? this._cacheGET[pathStr] : undefined;
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+    const segments = splitPath(pathStr);
+    const depth = segments.length;
+    const restCacheRef = { value: null as string[] | null };
+    const match = this._walk(this._root, segments, restCacheRef, depth, 0, 'GET', pathStr, null);
+    let resolved = match;
+    if (!resolved) {
+      resolved = this._walk(this._root, segments, restCacheRef, depth, 0, '*', pathStr, null);
+    }
+    this._cacheSet('GET', pathStr, resolved);
+    return resolved;
+  }
+
+  private _findGeneric(method: string, path: string): RouteMatch | null {
     let methodKey: string;
     switch (method) {
-      case 'GET':
       case 'POST':
       case 'PUT':
       case 'PATCH':
