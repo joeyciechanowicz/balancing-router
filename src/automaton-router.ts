@@ -29,7 +29,7 @@ type SegmentToken =
 
 interface ValidatorEntry {
   kind: 'none' | 'int' | 'alpha' | 'slug' | 'locale' | 'uuid' | 'regex';
-  test: ((segment: string) => boolean) | null;
+  code: number;
   regex?: RegExp;
 }
 
@@ -73,6 +73,13 @@ interface MethodAutomaton {
 
 const DYN_PARAM = 1;
 const DYN_WILDCARD = 2;
+const VAL_NONE = 0;
+const VAL_INT = 1;
+const VAL_ALPHA = 2;
+const VAL_SLUG = 3;
+const VAL_LOCALE = 4;
+const VAL_UUID = 5;
+const VAL_REGEX = 6;
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 const methodCache = Object.create(null) as Record<string, string>;
 
@@ -83,7 +90,7 @@ export class AutomatonRouter {
 
   private readonly _automata = new Map<string, MethodAutomaton>();
   private readonly _regexRoutes = new Map<string, RegexRouteDef[]>();
-  private readonly _validators: ValidatorEntry[] = [{ kind: 'none', test: null }];
+  private readonly _validators: ValidatorEntry[] = [{ kind: 'none', code: VAL_NONE }];
   private readonly _validatorCache = new Map<string, number>();
   private _stateStack: number[] = [0];
   private _indexStack: number[] = [0];
@@ -285,7 +292,30 @@ export class AutomatonRouter {
         if (kind === DYN_PARAM) {
           const validatorId = automaton.dynValidatorIds[edgeIndex];
           const validator = this._validators[validatorId];
-          if (validator.test && !validator.test(segment)) continue;
+          switch (validator.code) {
+            case VAL_NONE:
+              break;
+            case VAL_INT:
+              if (!isIntSegment(segment)) continue;
+              break;
+            case VAL_ALPHA:
+              if (!isAlphaSegment(segment)) continue;
+              break;
+            case VAL_SLUG:
+              if (!isSlugSegment(segment)) continue;
+              break;
+            case VAL_LOCALE:
+              if (!isLocaleSegment(segment)) continue;
+              break;
+            case VAL_UUID:
+              if (!isUuidSegment(segment)) continue;
+              break;
+            case VAL_REGEX:
+              if (!validator.regex || !validator.regex.test(segment)) continue;
+              break;
+            default:
+              continue;
+          }
           push(automaton.dynNext[edgeIndex], index + 1, capCount, automaton.dynNameIds[edgeIndex], segment, -1);
           continue;
         }
@@ -565,22 +595,22 @@ export class AutomatonRouter {
     let entry: ValidatorEntry;
 
     if (trimmed === '#int' || trimmed === '\\d+' || trimmed === '[0-9]+' || trimmed === '\\d{1,}') {
-      entry = { kind: 'int', test: isIntSegment };
+      entry = { kind: 'int', code: VAL_INT };
     } else if (trimmed === '#alpha' || trimmed === '[a-zA-Z]+' || trimmed === '[A-Za-z]+') {
-      entry = { kind: 'alpha', test: isAlphaSegment };
+      entry = { kind: 'alpha', code: VAL_ALPHA };
     } else if (trimmed === '#slug' || trimmed === '[a-z0-9-]+' || trimmed === '[A-Za-z0-9-]+') {
-      entry = { kind: 'slug', test: isSlugSegment };
+      entry = { kind: 'slug', code: VAL_SLUG };
     } else if (trimmed === '#locale' || trimmed === '[a-z]{2}-[A-Z]{2}') {
-      entry = { kind: 'locale', test: isLocaleSegment };
+      entry = { kind: 'locale', code: VAL_LOCALE };
     } else if (
       trimmed === '#uuid' ||
       trimmed === '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}' ||
       trimmed === '[0-9a-fA-F-]{36}'
     ) {
-      entry = { kind: 'uuid', test: isUuidSegment };
+      entry = { kind: 'uuid', code: VAL_UUID };
     } else {
       const regex = new RegExp(`^${trimmed}$`);
-      entry = { kind: 'regex', regex, test: (value) => regex.test(value) };
+      entry = { kind: 'regex', code: VAL_REGEX, regex };
     }
 
     const id = this._validators.length;
