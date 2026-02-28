@@ -82,6 +82,13 @@ const VAL_UUID = 5;
 const VAL_REGEX = 6;
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 const methodCache = Object.create(null) as Record<string, string>;
+const VALIDATOR_ALIAS_CODES = Object.freeze({
+  int: VAL_INT,
+  alpha: VAL_ALPHA,
+  slug: VAL_SLUG,
+  locale: VAL_LOCALE,
+  uuid: VAL_UUID,
+} as const);
 
 export class AutomatonRouter {
   private readonly _routes: RouteDef[] = [];
@@ -594,16 +601,46 @@ export class AutomatonRouter {
     const trimmed = pattern.trim();
     let entry: ValidatorEntry;
 
-    if (trimmed === '#int' || trimmed === '\\d+' || trimmed === '[0-9]+' || trimmed === '\\d{1,}') {
+    if (trimmed.startsWith('#')) {
+      const alias = trimmed.slice(1);
+      const aliasCode = VALIDATOR_ALIAS_CODES[alias as keyof typeof VALIDATOR_ALIAS_CODES];
+      if (aliasCode === undefined) {
+        throw new Error(`[automaton-router] Unknown validator alias: ${trimmed}`);
+      }
+      switch (aliasCode) {
+        case VAL_INT:
+          entry = { kind: 'int', code: VAL_INT };
+          break;
+        case VAL_ALPHA:
+          entry = { kind: 'alpha', code: VAL_ALPHA };
+          break;
+        case VAL_SLUG:
+          entry = { kind: 'slug', code: VAL_SLUG };
+          break;
+        case VAL_LOCALE:
+          entry = { kind: 'locale', code: VAL_LOCALE };
+          break;
+        case VAL_UUID:
+          entry = { kind: 'uuid', code: VAL_UUID };
+          break;
+        default:
+          throw new Error(`[automaton-router] Unsupported validator alias code: ${aliasCode}`);
+      }
+      const id = this._validators.length;
+      this._validators.push(entry);
+      this._validatorCache.set(pattern, id);
+      return id;
+    }
+
+    if (trimmed === '\\d+' || trimmed === '[0-9]+' || trimmed === '\\d{1,}') {
       entry = { kind: 'int', code: VAL_INT };
-    } else if (trimmed === '#alpha' || trimmed === '[a-zA-Z]+' || trimmed === '[A-Za-z]+') {
+    } else if (trimmed === '[a-zA-Z]+' || trimmed === '[A-Za-z]+') {
       entry = { kind: 'alpha', code: VAL_ALPHA };
-    } else if (trimmed === '#slug' || trimmed === '[a-z0-9-]+' || trimmed === '[A-Za-z0-9-]+') {
+    } else if (trimmed === '[a-z0-9-]+' || trimmed === '[A-Za-z0-9-]+') {
       entry = { kind: 'slug', code: VAL_SLUG };
-    } else if (trimmed === '#locale' || trimmed === '[a-z]{2}-[A-Z]{2}') {
+    } else if (trimmed === '[a-z]{2}-[A-Z]{2}') {
       entry = { kind: 'locale', code: VAL_LOCALE };
     } else if (
-      trimmed === '#uuid' ||
       trimmed === '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}' ||
       trimmed === '[0-9a-fA-F-]{36}'
     ) {

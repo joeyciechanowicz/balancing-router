@@ -67,3 +67,47 @@ test('automaton: supports custom alias validators', () => {
   assert.ok(router.find('GET', '/users/123'));
   assert.equal(router.find('GET', '/users/abc'), null);
 });
+
+test('automaton: supports alpha alias validator', () => {
+  const router = createAutomatonRouter();
+  router.on('GET', '/name/:value#alpha', noop);
+  assert.ok(router.find('GET', '/name/Alice'));
+  assert.equal(router.find('GET', '/name/alice-1'), null);
+});
+
+test('automaton: supports slug alias validator', () => {
+  const router = createAutomatonRouter();
+  router.on('GET', '/post/:value#slug', noop);
+  assert.ok(router.find('GET', '/post/hello-world-2'));
+  assert.equal(router.find('GET', '/post/hello_world'), null);
+});
+
+test('automaton: supports locale alias validator', () => {
+  const router = createAutomatonRouter();
+  router.on('GET', '/locale/:value#locale', noop);
+  assert.ok(router.find('GET', '/locale/en-US'));
+  assert.equal(router.find('GET', '/locale/en-us'), null);
+});
+
+test('automaton: supports uuid alias validator', () => {
+  const router = createAutomatonRouter();
+  router.on('GET', '/id/:value#uuid', noop);
+  assert.ok(router.find('GET', '/id/550e8400-e29b-41d4-a716-446655440000'));
+  assert.equal(router.find('GET', '/id/not-a-uuid'), null);
+});
+
+test('automaton: supports optional alias segments', () => {
+  const router = createAutomatonRouter();
+  router.on('GET', '/users/:id#int?', noop);
+  assert.ok(router.find('GET', '/users'));
+  assert.ok(router.find('GET', '/users/123'));
+  assert.equal(router.find('GET', '/users/abc'), null);
+});
+
+test('automaton: throws on unknown alias', () => {
+  const router = createAutomatonRouter();
+  assert.throws(
+    () => router.on('GET', '/users/:id#doesnotexist', noop).find('GET', '/users/1'),
+    /Unknown validator alias/,
+  );
+});
