@@ -90,6 +90,9 @@ export class AutomatonRouter {
   private _capStack: number[] = [0];
   private _capNameIds: number[] = [0];
   private _capValues: string[] = [''];
+  private _capRestFrom: number[] = [0];
+  private _capRestEpoch: number[] = [0];
+  private _capEpochCounter = 1;
   private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
   private _cacheOther = new Map<string, Record<string, RouteMatch | null>>();
   private _cacheKeys: Array<{ method: string; path: string }> = [];
@@ -185,15 +188,27 @@ export class AutomatonRouter {
     const capStack = this._capStack;
     const capNameIds = this._capNameIds;
     const capValues = this._capValues;
+    const capRestFrom = this._capRestFrom;
+    const capRestEpoch = this._capRestEpoch;
     const segmentStarts = this._segmentStarts;
     const segmentEnds = this._segmentEnds;
+    let capEpoch = this._capEpochCounter + 1;
+    if (capEpoch === 0) capEpoch = 1;
+    this._capEpochCounter = capEpoch;
 
     let top = 0;
     stateStack[top] = 0;
     indexStack[top] = 0;
     capStack[top] = 0;
 
-    const push = (state: number, index: number, capCount: number, capNameId: number, capValue: string): void => {
+    const push = (
+      state: number,
+      index: number,
+      capCount: number,
+      capNameId: number,
+      capValue: string,
+      restFrom: number,
+    ): void => {
       top += 1;
       if (top >= stateStack.length) {
         const growBy = stateStack.length;
@@ -213,10 +228,16 @@ export class AutomatonRouter {
           for (let i = 0; i < growBy; i += 1) {
             capNameIds.push(0);
             capValues.push('');
+            capRestFrom.push(0);
+            capRestEpoch.push(0);
           }
         }
         capNameIds[capCount] = capNameId;
         capValues[capCount] = capValue;
+        if (restFrom >= 0) {
+          capRestFrom[capCount] = restFrom;
+          capRestEpoch[capCount] = capEpoch;
+        }
       }
     };
 
@@ -235,7 +256,10 @@ export class AutomatonRouter {
           }
           const params = Object.create(null) as Record<string, string>;
           for (let i = 0; i < capCount; i += 1) {
-            params[automaton.paramNames[capNameIds[i]]] = capValues[i];
+            params[automaton.paramNames[capNameIds[i]]] =
+              capRestEpoch[i] === capEpoch
+                ? buildRestFromPositions(path, segmentStarts, segmentEnds, capRestFrom[i], depth)
+                : capValues[i];
           }
           return { handler: accept.handler, params, store: accept.store };
         }
@@ -245,7 +269,7 @@ export class AutomatonRouter {
         for (let i = dynCount - 1; i >= 0; i -= 1) {
           const edgeIndex = dynStart + i;
           if (automaton.dynKind[edgeIndex] !== DYN_WILDCARD) continue;
-          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], '');
+          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], '', depth);
         }
         continue;
       }
@@ -261,12 +285,11 @@ export class AutomatonRouter {
           const validatorId = automaton.dynValidatorIds[edgeIndex];
           const validator = this._validators[validatorId];
           if (validator.test && !validator.test(segment)) continue;
-          push(automaton.dynNext[edgeIndex], index + 1, capCount, automaton.dynNameIds[edgeIndex], segment);
+          push(automaton.dynNext[edgeIndex], index + 1, capCount, automaton.dynNameIds[edgeIndex], segment, -1);
           continue;
         }
         if (kind === DYN_WILDCARD) {
-          const rest = buildRestFromPositions(path, segmentStarts, segmentEnds, index, depth);
-          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], rest);
+          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], '', index);
         }
       }
 
@@ -274,7 +297,7 @@ export class AutomatonRouter {
       if (staticMap) {
         const staticNext = staticMap[segment];
         if (staticNext !== undefined) {
-          push(staticNext, index + 1, capCount, -1, '');
+          push(staticNext, index + 1, capCount, -1, '', -1);
         }
       } else {
         const staticStart = automaton.stateStaticOffset[state];
@@ -282,7 +305,7 @@ export class AutomatonRouter {
         for (let i = 0; i < staticCount; i += 1) {
           const edgeIndex = staticStart + i;
           if (automaton.literals[automaton.staticLiteralIds[edgeIndex]] !== segment) continue;
-          push(automaton.staticNext[edgeIndex], index + 1, capCount, -1, '');
+          push(automaton.staticNext[edgeIndex], index + 1, capCount, -1, '', -1);
           break;
         }
       }
