@@ -96,6 +96,8 @@ export class AutomatonRouter {
   private _cacheLimit = 1_000_000;
   private _cacheSize = 0;
   private _cacheIndex = 0;
+  private _segmentStarts: number[] = [0];
+  private _segmentEnds: number[] = [0];
 
   on(method: string | string[], path: string | RegExp, handler: RouteHandler, store?: any): this {
     const methods = Array.isArray(method) ? method : [method];
@@ -137,25 +139,25 @@ export class AutomatonRouter {
   }
 
   private _findResolved(methodKey: string, pathStr: string): RouteMatch | null {
-    const segments = splitPath(pathStr);
+    const depth = this._scanPathSegments(pathStr);
 
     const methodAutomaton = this._automata.get(methodKey);
     if (methodAutomaton) {
-      const match = this._findInAutomaton(methodAutomaton, pathStr, segments);
+      const match = this._findInAutomaton(methodAutomaton, pathStr, depth);
       if (match) return match;
     }
 
     const wildcardAutomaton = this._automata.get('*');
     if (wildcardAutomaton) {
-      const match = this._findInAutomaton(wildcardAutomaton, pathStr, segments);
+      const match = this._findInAutomaton(wildcardAutomaton, pathStr, depth);
       if (match) return match;
     }
 
-    const regexMatch = this._findInRegex(methodKey, pathStr, segments.length);
+    const regexMatch = this._findInRegex(methodKey, pathStr, depth);
     if (regexMatch) return regexMatch;
 
     if (methodKey !== '*') {
-      return this._findInRegex('*', pathStr, segments.length);
+      return this._findInRegex('*', pathStr, depth);
     }
 
     return null;
@@ -177,13 +179,14 @@ export class AutomatonRouter {
     return null;
   }
 
-  private _findInAutomaton(automaton: MethodAutomaton, path: string, segments: string[]): RouteMatch | null {
-    const depth = segments.length;
+  private _findInAutomaton(automaton: MethodAutomaton, path: string, depth: number): RouteMatch | null {
     const stateStack = this._stateStack;
     const indexStack = this._indexStack;
     const capStack = this._capStack;
     const capNameIds = this._capNameIds;
     const capValues = this._capValues;
+    const segmentStarts = this._segmentStarts;
+    const segmentEnds = this._segmentEnds;
 
     let top = 0;
     stateStack[top] = 0;
@@ -247,7 +250,7 @@ export class AutomatonRouter {
         continue;
       }
 
-      const segment = segments[index];
+      const segment = path.slice(segmentStarts[index], segmentEnds[index]);
 
       const dynStart = automaton.stateDynOffset[state];
       const dynCount = automaton.stateDynCount[state];
@@ -262,7 +265,7 @@ export class AutomatonRouter {
           continue;
         }
         if (kind === DYN_WILDCARD) {
-          const rest = buildRest(segments, index);
+          const rest = buildRestFromPositions(path, segmentStarts, segmentEnds, index, depth);
           push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], rest);
         }
       }
@@ -287,6 +290,41 @@ export class AutomatonRouter {
 
     void path;
     return null;
+  }
+
+  private _scanPathSegments(path: string): number {
+    const starts = this._segmentStarts;
+    const ends = this._segmentEnds;
+    let depth = 0;
+    let start = 0;
+
+    for (let i = 0; i < path.length; i += 1) {
+      if (path.charCodeAt(i) !== 47) continue;
+      if (i > start) {
+        if (depth >= starts.length) {
+          starts.push(start);
+          ends.push(i);
+        } else {
+          starts[depth] = start;
+          ends[depth] = i;
+        }
+        depth += 1;
+      }
+      start = i + 1;
+    }
+
+    if (start < path.length) {
+      if (depth >= starts.length) {
+        starts.push(start);
+        ends.push(path.length);
+      } else {
+        starts[depth] = start;
+        ends[depth] = path.length;
+      }
+      depth += 1;
+    }
+
+    return depth;
   }
 
   private _ensureCompiled(): void {
@@ -624,10 +662,20 @@ function splitPath(path: string): string[] {
   return segments;
 }
 
-function buildRest(segments: string[], fromIndex: number): string {
-  if (fromIndex >= segments.length) return '';
-  if (fromIndex + 1 === segments.length) return segments[fromIndex];
-  return segments.slice(fromIndex).join('/');
+function buildRestFromPositions(
+  path: string,
+  starts: number[],
+  ends: number[],
+  fromIndex: number,
+  depth: number,
+): string {
+  if (fromIndex >= depth) return '';
+  let rest = path.slice(starts[fromIndex], ends[fromIndex]);
+  for (let i = fromIndex + 1; i < depth; i += 1) {
+    rest += '/';
+    rest += path.slice(starts[i], ends[i]);
+  }
+  return rest;
 }
 
 function tokenizePathPattern(path: string): SegmentToken[][] {
