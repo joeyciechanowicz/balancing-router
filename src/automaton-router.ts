@@ -93,10 +93,11 @@ export class AutomatonRouter {
   private _capRestFrom: number[] = [0];
   private _capRestEpoch: number[] = [0];
   private _capEpochCounter = 1;
+  private _cacheLimit = 1_000_000;
   private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
   private _cacheOther = new Map<string, Record<string, RouteMatch | null>>();
-  private _cacheKeys: Array<{ method: string; path: string }> = [];
-  private _cacheLimit = 1_000_000;
+  private _cacheMethods: string[] = new Array(this._cacheLimit);
+  private _cachePaths: string[] = new Array(this._cacheLimit);
   private _cacheSize = 0;
   private _cacheIndex = 0;
   private _segmentStarts: number[] = [0];
@@ -355,7 +356,8 @@ export class AutomatonRouter {
     this._compile();
     this._cacheGET = Object.create(null);
     this._cacheOther.clear();
-    this._cacheKeys = [];
+    this._cacheMethods = new Array(this._cacheLimit);
+    this._cachePaths = new Array(this._cacheLimit);
     this._cacheSize = 0;
     this._cacheIndex = 0;
     this._compiled = true;
@@ -595,17 +597,21 @@ export class AutomatonRouter {
       return;
     }
     if (this._cacheSize < this._cacheLimit) {
-      this._cacheKeys.push({ method, path });
+      const writeIndex = this._cacheSize;
+      this._cacheMethods[writeIndex] = method;
+      this._cachePaths[writeIndex] = path;
       this._cacheSize += 1;
     } else {
-      const oldest = this._cacheKeys[this._cacheIndex];
-      if (oldest) {
-        const oldCache = this._getMethodCache(oldest.method);
+      const oldestMethod = this._cacheMethods[this._cacheIndex];
+      const oldestPath = this._cachePaths[this._cacheIndex];
+      if (oldestMethod !== undefined) {
+        const oldCache = this._getMethodCache(oldestMethod);
         if (oldCache) {
-          delete oldCache[oldest.path];
+          delete oldCache[oldestPath];
         }
       }
-      this._cacheKeys[this._cacheIndex] = { method, path };
+      this._cacheMethods[this._cacheIndex] = method;
+      this._cachePaths[this._cacheIndex] = path;
       this._cacheIndex = (this._cacheIndex + 1) % this._cacheLimit;
     }
     methodCacheEntry[path] = value;
