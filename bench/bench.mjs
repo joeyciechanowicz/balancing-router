@@ -499,16 +499,20 @@ async function runBenchmarks() {
 
   if (!jsonOutput) {
     for (const [name, routerEntry] of routers) {
-      const { lookup, warmup } = routerEntry;
+      const { lookup, warmup, framework } = routerEntry;
       const nextLookup = createCorpusLookup(fullRequestCorpus);
       const benchLookup = asyncMode
         ? async () => {
             const [method, path] = nextLookup();
-            await lookup(method, path, getRequest(method, path));
+            if (framework) {
+              await lookup(method, path, getRequest(method, path));
+              return;
+            }
+            await lookup(method, path);
           }
         : () => {
-            const [method, path] = nextLookup();
-            lookup(method, path);
+          const [method, path] = nextLookup();
+          lookup(method, path);
           };
       for (let i = 0; i < warmupRounds; i += 1) {
         if (asyncMode) {
@@ -527,12 +531,16 @@ async function runBenchmarks() {
   }
 
   for (const [name, routerEntry] of routers) {
-    const { lookup, warmup } = routerEntry;
+    const { lookup, warmup, framework } = routerEntry;
     const nextLookup = createCorpusLookup(fullRequestCorpus);
     const benchLookup = asyncMode
       ? async () => {
           const [method, path] = nextLookup();
-          await lookup(method, path, getRequest(method, path));
+          if (framework) {
+            await lookup(method, path, getRequest(method, path));
+            return;
+          }
+          await lookup(method, path);
         }
       : () => {
           const [method, path] = nextLookup();
