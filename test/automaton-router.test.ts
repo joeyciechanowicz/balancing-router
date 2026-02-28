@@ -111,3 +111,32 @@ test('automaton: throws on unknown alias', () => {
     /Unknown validator alias/,
   );
 });
+
+test('automaton: prioritizes static over param and wildcard', () => {
+  const router = createAutomatonRouter();
+  const staticHandler = () => 'static';
+  const paramHandler = () => 'param';
+  const wildcardHandler = () => 'wildcard';
+  router.on('GET', '/items/all', staticHandler);
+  router.on('GET', '/items/:id', paramHandler);
+  router.on('GET', '/items/:rest*', wildcardHandler);
+  assert.equal(router.find('GET', '/items/all')?.handler, staticHandler);
+});
+
+test('automaton: prefers method-specific over wildcard method', () => {
+  const router = createAutomatonRouter();
+  const anyHandler = () => 'any';
+  const getHandler = () => 'get';
+  router.on('*', '/status', anyHandler);
+  router.on('GET', '/status', getHandler);
+  assert.equal(router.find('GET', '/status')?.handler, getHandler);
+});
+
+test('automaton: prefers concrete route over matching regex route', () => {
+  const router = createAutomatonRouter();
+  const regexHandler = () => 'regex';
+  const concreteHandler = () => 'concrete';
+  router.on('GET', /^\/users\/\d+$/, regexHandler);
+  router.on('GET', '/users/:id#int', concreteHandler);
+  assert.equal(router.find('GET', '/users/42')?.handler, concreteHandler);
+});
