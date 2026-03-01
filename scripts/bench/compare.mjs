@@ -1,9 +1,10 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
+const tscPath = resolve(root, 'node_modules', 'typescript', 'bin', 'tsc');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -17,24 +18,16 @@ function getPreviousIndex() {
   return result.stdout;
 }
 
-function buildRouter(sourcePath, outDir) {
-  const result = run('npx', [
-    'tsc',
-    '--target',
-    'ES2019',
-    '--module',
-    'CommonJS',
-    '--moduleResolution',
-    'Node',
-    '--declaration',
-    '--esModuleInterop',
-    '--skipLibCheck',
+function buildRouter(projectDir, outDir) {
+  const result = run(process.execPath, [
+    tscPath,
+    '-p',
+    'tsconfig.json',
     '--outDir',
     outDir,
-    sourcePath,
-  ], { cwd: root });
+  ], { cwd: projectDir });
   if (result.status !== 0) {
-    throw new Error(result.stderr || 'TypeScript build failed');
+    throw new Error(result.stderr || result.stdout || 'TypeScript build failed');
   }
   return resolve(outDir, 'index.js');
 }
@@ -68,24 +61,36 @@ if (!previousIndex) {
 }
 
 const tmpDir = mkdtempSync(join(tmpdir(), 'balancing-router-'));
-const previousSource = resolve(tmpDir, 'index.ts');
-writeFileSync(previousSource, previousIndex, 'utf8');
+const previousWorktree = resolve(tmpDir, 'prev-tree');
+let worktreeAdded = false;
 
-const previousPath = buildRouter(previousSource, resolve(tmpDir, 'prev-dist'));
-const currentPath = buildRouter(resolve(root, 'src', 'index.ts'), resolve(tmpDir, 'current-dist'));
-
-const current = runBench(currentPath);
-const previous = runBench(previousPath);
-
-const previousMap = new Map(previous.results.map((entry) => [entry.name, entry]));
-
-console.log('Benchmark comparison (current vs previous):');
-for (const entry of current.results) {
-  const prev = previousMap.get(entry.name);
-  if (!prev) {
-    console.log(`- ${entry.name}: ${Math.round(entry.hz)} ops/sec (no previous baseline)`);
-    continue;
+try {
+  const addResult = run('git', ['worktree', 'add', '--detach', previousWorktree, 'HEAD~1'], { cwd: root });
+  if (addResult.status !== 0) {
+    throw new Error(addResult.stderr || addResult.stdout || 'Failed to create temporary worktree');
   }
-  const delta = formatDelta(entry.hz, prev.hz);
-  console.log(`- ${entry.name}: ${Math.round(entry.hz)} ops/sec (prev ${Math.round(prev.hz)}; ${delta})`);
+  worktreeAdded = true;
+
+  const previousPath = buildRouter(previousWorktree, resolve(tmpDir, 'prev-dist'));
+  const currentPath = buildRouter(root, resolve(tmpDir, 'current-dist'));
+
+  const current = runBench(currentPath);
+  const previous = runBench(previousPath);
+
+  const previousMap = new Map(previous.results.map((entry) => [entry.name, entry]));
+
+  console.log('Benchmark comparison (current vs previous):');
+  for (const entry of current.results) {
+    const prev = previousMap.get(entry.name);
+    if (!prev) {
+      console.log(`- ${entry.name}: ${Math.round(entry.hz)} ops/sec (no previous baseline)`);
+      continue;
+    }
+    const delta = formatDelta(entry.hz, prev.hz);
+    console.log(`- ${entry.name}: ${Math.round(entry.hz)} ops/sec (prev ${Math.round(prev.hz)}; ${delta})`);
+  }
+} finally {
+  if (worktreeAdded) {
+    run('git', ['worktree', 'remove', '--force', previousWorktree], { cwd: root });
+  }
 }
