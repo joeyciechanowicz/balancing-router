@@ -97,6 +97,7 @@ export class AutomatonRouter {
 
   private readonly _automata = new Map<string, MethodAutomaton>();
   private readonly _regexRoutes = new Map<string, RegexRouteDef[]>();
+  private _hasRegexRoutes = false;
   private readonly _validators: ValidatorEntry[] = [{ kind: 'none', code: VAL_NONE }];
   private readonly _validatorCache = new Map<string, number>();
   private _stateStack: number[] = [0];
@@ -185,11 +186,13 @@ export class AutomatonRouter {
       if (match) return match;
     }
 
-    const regexMatch = this._findInRegex(methodKey, pathStr, depth);
-    if (regexMatch) return regexMatch;
+    if (this._hasRegexRoutes) {
+      const regexMatch = this._findInRegex(methodKey, pathStr, depth);
+      if (regexMatch) return regexMatch;
 
-    if (methodKey !== '*') {
-      return this._findInRegex('*', pathStr, depth);
+      if (methodKey !== '*') {
+        return this._findInRegex('*', pathStr, depth);
+      }
     }
 
     return null;
@@ -420,6 +423,7 @@ export class AutomatonRouter {
   private _compile(): void {
     this._automata.clear();
     this._regexRoutes.clear();
+    this._hasRegexRoutes = false;
 
     const groupedStringRoutes = new Map<string, RouteDef[]>();
 
@@ -446,6 +450,7 @@ export class AutomatonRouter {
       regexList.sort((a, b) => a.order - b.order);
       this._regexRoutes.set(method, regexList);
     }
+    this._hasRegexRoutes = this._regexRoutes.size > 0;
 
     for (const [method, defs] of groupedStringRoutes) {
       this._automata.set(method, this._compileMethod(defs));
