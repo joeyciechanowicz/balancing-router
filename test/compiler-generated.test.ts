@@ -31,6 +31,17 @@ test('generated: method-specific route wins over wildcard route', () => {
   assert.equal(router.find('POST', '/status')?.handler, anyHandler);
 });
 
+test('generated: cache invalidates when new routes are added', () => {
+  const router = createGeneratedRouter({ mode: 'generated' });
+  router.on('GET', '/users', noop);
+  assert.equal(router.find('GET', '/users')?.handler, noop);
+  assert.equal(router.find('GET', '/new'), null);
+
+  const newHandler = () => 'new';
+  router.on('GET', '/new', newHandler);
+  assert.equal(router.find('GET', '/new')?.handler, newHandler);
+});
+
 test('generated: interpreter mode parity with generated mode', async () => {
   const generated = createGeneratedRouter({ mode: 'generated' });
   const interpreted = createGeneratedRouter({ mode: 'interpreted' });
@@ -75,4 +86,3 @@ function mulberry32(seed: number): () => number {
     return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
   };
 }
-

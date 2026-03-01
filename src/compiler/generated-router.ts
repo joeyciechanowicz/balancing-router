@@ -36,6 +36,13 @@ export class GeneratedRouter {
   private readonly _routes: CompiledRoute[] = [];
   private _order = 0;
   private readonly _mode: 'generated' | 'interpreted';
+  private _cacheLimit = 1_000_000;
+  private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
+  private _cacheOther = new Map<string, Record<string, RouteMatch | null>>();
+  private _cacheMethods: string[] = new Array(this._cacheLimit);
+  private _cachePaths: string[] = new Array(this._cacheLimit);
+  private _cacheSize = 0;
+  private _cacheIndex = 0;
 
   constructor(options?: GeneratedRouterOptions) {
     this._mode = options?.mode ?? 'generated';
@@ -54,12 +61,16 @@ export class GeneratedRouter {
         order: this._order++,
       });
     }
+    this._clearCache();
     return this;
   }
 
   find(method: string, path: string): RouteMatch | null {
     const methodKey = normalizeMethod(method);
-    const segments = splitPath(normalizePath(path));
+    const pathStr = normalizePath(path);
+    const cached = this._cacheGet(methodKey, pathStr);
+    if (cached !== undefined) return cached;
+    const segments = splitPath(pathStr);
 
     let wildcardMatch: RouteMatch | null = null;
     let wildcardOrder = Number.POSITIVE_INFINITY;
@@ -70,7 +81,9 @@ export class GeneratedRouter {
       if (!params) continue;
 
       if (route.method === methodKey) {
-        return { handler: route.handler, params, store: route.store };
+        const resolved = { handler: route.handler, params, store: route.store };
+        this._cacheSet(methodKey, pathStr, resolved);
+        return resolved;
       }
 
       if (route.method === '*' && route.order < wildcardOrder) {
@@ -79,6 +92,7 @@ export class GeneratedRouter {
       }
     }
 
+    this._cacheSet(methodKey, pathStr, wildcardMatch);
     return wildcardMatch;
   }
 
@@ -94,6 +108,62 @@ export class GeneratedRouter {
       }
     }
     return null;
+  }
+
+  private _cacheGet(method: string, path: string): RouteMatch | null | undefined {
+    if (this._cacheLimit <= 0) return undefined;
+    if (method === 'GET') return this._cacheGET[path];
+    const methodMap = this._cacheOther.get(method);
+    if (!methodMap) return undefined;
+    return methodMap[path];
+  }
+
+  private _cacheSet(method: string, path: string, match: RouteMatch | null): void {
+    if (this._cacheLimit <= 0) return;
+    let methodMap: Record<string, RouteMatch | null>;
+    if (method === 'GET') {
+      methodMap = this._cacheGET;
+    } else {
+      methodMap = this._cacheOther.get(method) ?? Object.create(null);
+      this._cacheOther.set(method, methodMap);
+    }
+
+    if (methodMap[path] !== undefined) {
+      methodMap[path] = match;
+      return;
+    }
+
+    if (this._cacheSize < this._cacheLimit) {
+      this._cacheMethods[this._cacheSize] = method;
+      this._cachePaths[this._cacheSize] = path;
+      this._cacheSize += 1;
+      methodMap[path] = match;
+      return;
+    }
+
+    const evictIndex = this._cacheIndex;
+    const evictMethod = this._cacheMethods[evictIndex];
+    const evictPath = this._cachePaths[evictIndex];
+    if (evictMethod === 'GET') {
+      delete this._cacheGET[evictPath];
+    } else {
+      const evictMap = this._cacheOther.get(evictMethod);
+      if (evictMap) delete evictMap[evictPath];
+    }
+
+    this._cacheMethods[evictIndex] = method;
+    this._cachePaths[evictIndex] = path;
+    methodMap[path] = match;
+    this._cacheIndex = (evictIndex + 1) % this._cacheLimit;
+  }
+
+  private _clearCache(): void {
+    this._cacheGET = Object.create(null);
+    this._cacheOther = new Map();
+    this._cacheMethods = new Array(this._cacheLimit);
+    this._cachePaths = new Array(this._cacheLimit);
+    this._cacheSize = 0;
+    this._cacheIndex = 0;
   }
 }
 
@@ -199,4 +269,3 @@ function splitPath(path: string): string[] {
   if (start < path.length) segments.push(path.slice(start));
   return segments;
 }
-
