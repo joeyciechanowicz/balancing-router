@@ -378,10 +378,22 @@ export class AutomatonRouter {
     const starts = this._segmentStarts;
     const ends = this._segmentEnds;
     const pathLen = path.length;
+    if (pathLen <= 1) return 0;
+    const firstSep = path.indexOf('/', 1);
+    if (firstSep === -1) {
+      if (starts.length === 0) {
+        starts.push(1);
+        ends.push(pathLen);
+      } else {
+        starts[0] = 1;
+        ends[0] = pathLen;
+      }
+      return 1;
+    }
     let depth = 0;
     let start = 1;
 
-    for (let i = 1; i < pathLen; i += 1) {
+    for (let i = firstSep; i < pathLen; i += 1) {
       if (path.charCodeAt(i) !== 47) continue;
       if (i > start) {
         if (depth >= starts.length) {
