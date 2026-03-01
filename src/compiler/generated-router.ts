@@ -346,13 +346,17 @@ function normalizePath(path: string): string {
 
 function splitPath(path: string): string[] {
   if (path === '/') return [];
+  const firstSep = path.indexOf('/', 1);
+  if (firstSep === -1) {
+    return [path.slice(1)];
+  }
   const segments: string[] = [];
-  let start = 0;
-  for (let i = 0; i < path.length; i += 1) {
-    if (path.charCodeAt(i) === 47) {
-      if (i > start) segments.push(path.slice(start, i));
-      start = i + 1;
-    }
+  let start = 1;
+  let sep = firstSep;
+  while (sep !== -1) {
+    if (sep > start) segments.push(path.slice(start, sep));
+    start = sep + 1;
+    sep = path.indexOf('/', start);
   }
   if (start < path.length) segments.push(path.slice(start));
   return segments;
