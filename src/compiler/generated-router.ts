@@ -83,7 +83,7 @@ export class GeneratedRouter {
 
   private _findGET(path: string): RouteMatch | null {
     const pathStr =
-      path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
+      path.charCodeAt(0) === 47 ? path : path.length === 0 ? '/' : `/${path}`;
     const cached = this._cacheGET[pathStr];
     if (cached !== undefined) return cached;
     const resolved = this._resolveMatch('GET', pathStr);
@@ -93,7 +93,7 @@ export class GeneratedRouter {
 
   private _findWithMethod(methodKey: string, path: string): RouteMatch | null {
     const pathStr =
-      path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
+      path.charCodeAt(0) === 47 ? path : path.length === 0 ? '/' : `/${path}`;
     const cached = this._cacheGet(methodKey, pathStr);
     if (cached !== undefined) return cached;
     const resolved = this._resolveMatch(methodKey, pathStr);
