@@ -206,7 +206,9 @@ export class GeneratedRouter {
     delete this._cacheGET[evictPath];
     this._cacheGETPaths[evictIndex] = path;
     this._cacheGET[path] = match;
-    this._cacheGETIndex = (evictIndex + 1) % this._cacheLimit;
+    let next = evictIndex + 1;
+    if (next === this._cacheLimit) next = 0;
+    this._cacheGETIndex = next;
   }
 
   private _clearCache(): void {
