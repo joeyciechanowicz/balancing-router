@@ -71,7 +71,14 @@ export class GeneratedRouter {
   }
 
   find(method: string, path: string): RouteMatch | null {
+    if (method === 'GET') {
+      return this._findWithMethod('GET', path);
+    }
     const methodKey = normalizeMethod(method);
+    return this._findWithMethod(methodKey, path);
+  }
+
+  private _findWithMethod(methodKey: string, path: string): RouteMatch | null {
     const pathStr = normalizePath(path);
     const cached = this._cacheGet(methodKey, pathStr);
     if (cached !== undefined) return cached;
