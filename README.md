@@ -8,22 +8,6 @@ Trie-based HTTP router with adaptive rebalancing. It supports Express-style path
 
 Creates a new router instance.
 
-### `createRouterParser(options?): RouterParserSetup`
-
-Creates an opt-in compiled parser setup. Register routes with `add(...)`, then call `compile()` to build a matcher router.
-
-```js
-import { createRouterParser } from "balancing-router";
-
-const setup = createRouterParser({ mode: "generated" });
-setup.add("GET", "/(catalog|portal)/:locale([a-z]{2}-[A-Z]{2})?/saved", () => {});
-const router = setup.compile();
-const match = router.find("GET", "/catalog/en-US/saved");
-```
-
-Options:
-- `mode: "generated" | "interpreted"` (default `"generated"`)
-
 ### `router.on(method, path, handler, store?)`
 
 Register a handler for one or more HTTP methods.

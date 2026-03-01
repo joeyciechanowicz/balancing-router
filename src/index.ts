@@ -552,7 +552,6 @@ export function createRouter(): Router {
 }
 
 export { createAutomatonRouter } from './automaton-router';
-export { createRouterParser } from './compiler/setup';
 
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 
