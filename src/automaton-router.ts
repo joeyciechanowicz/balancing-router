@@ -135,7 +135,7 @@ export class AutomatonRouter {
   find(method: string, path: string): RouteMatch | null {
     this._ensureCompiled();
 
-    const pathStr = path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
+    const pathStr = path.charCodeAt(0) === 47 ? path : path.length === 0 ? '/' : `/${path}`;
 
     if (method === 'GET') {
       const cached = this._cacheGET[pathStr];
@@ -372,10 +372,11 @@ export class AutomatonRouter {
   private _scanPathSegments(path: string): number {
     const starts = this._segmentStarts;
     const ends = this._segmentEnds;
+    const pathLen = path.length;
     let depth = 0;
     let start = 1;
 
-    for (let i = 1; i < path.length; i += 1) {
+    for (let i = 1; i < pathLen; i += 1) {
       if (path.charCodeAt(i) !== 47) continue;
       if (i > start) {
         if (depth >= starts.length) {
@@ -390,13 +391,13 @@ export class AutomatonRouter {
       start = i + 1;
     }
 
-    if (start < path.length) {
+    if (start < pathLen) {
       if (depth >= starts.length) {
         starts.push(start);
-        ends.push(path.length);
+        ends.push(pathLen);
       } else {
         starts[depth] = start;
-        ends[depth] = path.length;
+        ends[depth] = pathLen;
       }
       depth += 1;
     }
