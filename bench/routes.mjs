@@ -62,4 +62,43 @@ if (localPrecomputedUrlsModule) {
 
 export const routeSetName = moduleRoutes ? "module" : "generic";
 export const routes = moduleRoutes ?? genericRoutes;
-export const precomputedUrls = modulePrecomputedUrls ?? genericPrecomputedUrls;
+const notFoundProbability = 0.05;
+const precomputedSourceUrls = modulePrecomputedUrls ?? genericPrecomputedUrls;
+
+function normalizePathLike(path) {
+  if (!path) return "/";
+  return path.charCodeAt(0) === 47 ? path : `/${path}`;
+}
+
+function hash32(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function shouldInjectNotFound(index, path) {
+  const key = `${index}:${path}`;
+  const threshold = Math.floor(notFoundProbability * 0x100000000);
+  return hash32(key) < threshold;
+}
+
+function toNotFoundVariant(path) {
+  if (path === "/") return "/__404__";
+  return `/__404__${path}`;
+}
+
+function injectNotFoundUrls(urls) {
+  const next = new Array(urls.length);
+  for (let i = 0; i < urls.length; i += 1) {
+    const original = normalizePathLike(urls[i]);
+    next[i] = shouldInjectNotFound(i, original) ? toNotFoundVariant(original) : original;
+  }
+  return next;
+}
+
+export const precomputedUrls = Array.isArray(precomputedSourceUrls)
+  ? injectNotFoundUrls(precomputedSourceUrls)
+  : precomputedSourceUrls;
