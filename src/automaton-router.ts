@@ -96,6 +96,8 @@ export class AutomatonRouter {
   private _routeOrder = 0;
 
   private readonly _automata = new Map<string, MethodAutomaton>();
+  private _automatonGET: MethodAutomaton | null = null;
+  private _automatonWildcard: MethodAutomaton | null = null;
   private readonly _regexRoutes = new Map<string, RegexRouteDef[]>();
   private _hasRegexRoutes = false;
   private readonly _validators: ValidatorEntry[] = [{ kind: 'none', code: VAL_NONE }];
@@ -174,15 +176,15 @@ export class AutomatonRouter {
   private _findResolved(methodKey: string, pathStr: string): RouteMatch | null {
     const depth = this._scanPathSegments(pathStr);
 
-    const methodAutomaton = this._automata.get(methodKey);
+    const methodAutomaton =
+      methodKey === 'GET' ? this._automatonGET : methodKey === '*' ? this._automatonWildcard : this._automata.get(methodKey);
     if (methodAutomaton) {
       const match = this._findInAutomaton(methodAutomaton, pathStr, depth);
       if (match) return match;
     }
 
-    const wildcardAutomaton = this._automata.get('*');
-    if (wildcardAutomaton) {
-      const match = this._findInAutomaton(wildcardAutomaton, pathStr, depth);
+    if (methodKey !== '*' && this._automatonWildcard) {
+      const match = this._findInAutomaton(this._automatonWildcard, pathStr, depth);
       if (match) return match;
     }
 
@@ -422,6 +424,8 @@ export class AutomatonRouter {
 
   private _compile(): void {
     this._automata.clear();
+    this._automatonGET = null;
+    this._automatonWildcard = null;
     this._regexRoutes.clear();
     this._hasRegexRoutes = false;
 
@@ -455,6 +459,8 @@ export class AutomatonRouter {
     for (const [method, defs] of groupedStringRoutes) {
       this._automata.set(method, this._compileMethod(defs));
     }
+    this._automatonGET = this._automata.get('GET') ?? null;
+    this._automatonWildcard = this._automata.get('*') ?? null;
   }
 
   private _compileMethod(defs: RouteDef[]): MethodAutomaton {
