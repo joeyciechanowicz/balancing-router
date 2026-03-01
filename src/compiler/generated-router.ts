@@ -82,7 +82,8 @@ export class GeneratedRouter {
   }
 
   private _findGET(path: string): RouteMatch | null {
-    const pathStr = normalizePath(path);
+    const pathStr =
+      path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
     const cached = this._cacheGET[pathStr];
     if (cached !== undefined) return cached;
     const resolved = this._resolveMatch('GET', pathStr);
@@ -91,7 +92,8 @@ export class GeneratedRouter {
   }
 
   private _findWithMethod(methodKey: string, path: string): RouteMatch | null {
-    const pathStr = normalizePath(path);
+    const pathStr =
+      path.length === 0 ? '/' : path.charCodeAt(0) === 47 ? path : `/${path}`;
     const cached = this._cacheGet(methodKey, pathStr);
     if (cached !== undefined) return cached;
     const resolved = this._resolveMatch(methodKey, pathStr);
@@ -337,11 +339,6 @@ function normalizeMethod(method: string): string {
   const normalized = trimmed.toUpperCase();
   methodCache[trimmed] = normalized;
   return normalized;
-}
-
-function normalizePath(path: string): string {
-  if (path.length === 0) return '/';
-  return path.charCodeAt(0) === 47 ? path : `/${path}`;
 }
 
 function splitPath(path: string): string[] {
