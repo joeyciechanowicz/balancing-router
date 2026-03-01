@@ -23,6 +23,8 @@ interface CompiledRoute {
   handler: RouteHandler;
   store?: any;
   order: number;
+  minDepth: number;
+  maxDepth: number;
 }
 
 interface GeneratedRouterOptions {
@@ -52,6 +54,7 @@ export class GeneratedRouter {
     const methods = Array.isArray(method) ? method : [method];
     const ir = buildRouteIrFromPattern(path);
     const variants = ir.variants.map((variant) => compileVariant(variant, this._mode === 'generated'));
+    const bounds = computeDepthBounds(variants);
     for (const item of methods) {
       this._routes.push({
         method: normalizeMethod(item),
@@ -59,6 +62,8 @@ export class GeneratedRouter {
         handler,
         store,
         order: this._order++,
+        minDepth: bounds.minDepth,
+        maxDepth: bounds.maxDepth,
       });
     }
     this._clearCache();
@@ -71,12 +76,15 @@ export class GeneratedRouter {
     const cached = this._cacheGet(methodKey, pathStr);
     if (cached !== undefined) return cached;
     const segments = splitPath(pathStr);
+    const depth = segments.length;
 
     let wildcardMatch: RouteMatch | null = null;
     let wildcardOrder = Number.POSITIVE_INFINITY;
 
     for (let i = 0; i < this._routes.length; i += 1) {
       const route = this._routes[i];
+      if (depth < route.minDepth) continue;
+      if (route.maxDepth >= 0 && depth > route.maxDepth) continue;
       const params = this._matchRoute(route.variants, segments);
       if (!params) continue;
 
@@ -235,6 +243,37 @@ function matchInterpretedVariant(variant: CompiledVariant, pathSegments: string[
 
   if (pathIndex !== pathSegments.length) return null;
   return params ?? EMPTY_PARAMS;
+}
+
+function computeDepthBounds(variants: CompiledVariantMatcher[]): { minDepth: number; maxDepth: number } {
+  let minDepth = Number.POSITIVE_INFINITY;
+  let maxDepth = 0;
+  let hasOpenMax = false;
+
+  for (let i = 0; i < variants.length; i += 1) {
+    const segments = variants[i].interpreted.segments;
+    let wildcardIndex = -1;
+    for (let s = 0; s < segments.length; s += 1) {
+      if (segments[s].kind === 'wildcard') {
+        wildcardIndex = s;
+        break;
+      }
+    }
+    const variantMin = wildcardIndex >= 0 ? wildcardIndex : segments.length;
+    const variantMax = wildcardIndex >= 0 ? -1 : segments.length;
+    if (variantMin < minDepth) minDepth = variantMin;
+    if (variantMax < 0) {
+      hasOpenMax = true;
+    } else if (variantMax > maxDepth) {
+      maxDepth = variantMax;
+    }
+  }
+
+  if (!Number.isFinite(minDepth)) minDepth = 0;
+  return {
+    minDepth,
+    maxDepth: hasOpenMax ? -1 : maxDepth,
+  };
 }
 
 function normalizeMethod(method: string): string {
