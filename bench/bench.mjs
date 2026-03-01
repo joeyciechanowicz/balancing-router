@@ -51,7 +51,7 @@ function loadRouter() {
   return require(resolve(root, "dist", "index.js"));
 }
 
-const { createRouter, createAutomatonRouter } = loadRouter();
+const { createRouter, createAutomatonRouter, createRouterParser } = loadRouter();
 function logBuildError(name, error) {
   const message = error && error.stack ? error.stack : String(error);
   console.error(`[bench] ${name} setup failed:\n${message}`);
@@ -196,6 +196,20 @@ function buildBalancingRouterV2() {
   for (const [method, path, handler] of routeFixtures) {
     router.on(method, path, handler);
   }
+  return {
+    lookup: (method, path) => {
+      return router.find(method, path);
+    },
+  };
+}
+
+function buildBalancingRouterCompiled() {
+  if (typeof createRouterParser !== "function") return null;
+  const setup = createRouterParser({ mode: "generated" });
+  for (const [method, path, handler] of routeFixtures) {
+    setup.add(method, path, handler);
+  }
+  const router = setup.compile();
   return {
     lookup: (method, path) => {
       return router.find(method, path);
@@ -471,6 +485,7 @@ async function runBenchmarks() {
   const routerBuilders = [
     ["balancing-router", () => buildBalancingRouter()],
     ["balancing-router-v2", () => buildBalancingRouterV2()],
+    ["balancing-router-compiled", () => buildBalancingRouterCompiled()],
     ["find-my-way", () => buildFindMyWay()],
     ["trouter", () => buildTrouter()],
     ["radix3", () => buildRadix3()],
