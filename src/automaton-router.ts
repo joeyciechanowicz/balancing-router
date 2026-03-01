@@ -145,7 +145,21 @@ export class AutomatonRouter {
       return resolved;
     }
 
-    const methodKey = normalizeMethod(method);
+    let methodKey: string;
+    switch (method) {
+      case 'POST':
+      case 'PUT':
+      case 'PATCH':
+      case 'DELETE':
+      case 'HEAD':
+      case 'OPTIONS':
+      case '*':
+        methodKey = method;
+        break;
+      default:
+        methodKey = normalizeMethod(method);
+        break;
+    }
     const methodCacheEntry = this._getMethodCache(methodKey);
     if (methodCacheEntry) {
       const cached = methodCacheEntry[pathStr];
@@ -359,9 +373,9 @@ export class AutomatonRouter {
     const starts = this._segmentStarts;
     const ends = this._segmentEnds;
     let depth = 0;
-    let start = 0;
+    let start = 1;
 
-    for (let i = 0; i < path.length; i += 1) {
+    for (let i = 1; i < path.length; i += 1) {
       if (path.charCodeAt(i) !== 47) continue;
       if (i > start) {
         if (depth >= starts.length) {
@@ -681,7 +695,9 @@ export class AutomatonRouter {
       }
       this._cacheMethods[this._cacheIndex] = method;
       this._cachePaths[this._cacheIndex] = path;
-      this._cacheIndex = (this._cacheIndex + 1) % this._cacheLimit;
+      let next = this._cacheIndex + 1;
+      if (next === this._cacheLimit) next = 0;
+      this._cacheIndex = next;
     }
     methodCacheEntry[path] = value;
   }
