@@ -40,6 +40,9 @@ export class GeneratedRouter {
   private readonly _mode: 'generated' | 'interpreted';
   private _cacheLimit = 1_000_000;
   private _cacheGET: Record<string, RouteMatch | null> = Object.create(null);
+  private _cacheGETPaths: string[] = new Array(this._cacheLimit);
+  private _cacheGETSize = 0;
+  private _cacheGETIndex = 0;
   private _cacheOther = new Map<string, Record<string, RouteMatch | null>>();
   private _cacheMethods: string[] = new Array(this._cacheLimit);
   private _cachePaths: string[] = new Array(this._cacheLimit);
@@ -191,32 +194,26 @@ export class GeneratedRouter {
       return;
     }
 
-    if (this._cacheSize < this._cacheLimit) {
-      this._cacheMethods[this._cacheSize] = 'GET';
-      this._cachePaths[this._cacheSize] = path;
-      this._cacheSize += 1;
+    if (this._cacheGETSize < this._cacheLimit) {
+      this._cacheGETPaths[this._cacheGETSize] = path;
+      this._cacheGETSize += 1;
       this._cacheGET[path] = match;
       return;
     }
 
-    const evictIndex = this._cacheIndex;
-    const evictMethod = this._cacheMethods[evictIndex];
-    const evictPath = this._cachePaths[evictIndex];
-    if (evictMethod === 'GET') {
-      delete this._cacheGET[evictPath];
-    } else {
-      const evictMap = this._cacheOther.get(evictMethod);
-      if (evictMap) delete evictMap[evictPath];
-    }
-
-    this._cacheMethods[evictIndex] = 'GET';
-    this._cachePaths[evictIndex] = path;
+    const evictIndex = this._cacheGETIndex;
+    const evictPath = this._cacheGETPaths[evictIndex];
+    delete this._cacheGET[evictPath];
+    this._cacheGETPaths[evictIndex] = path;
     this._cacheGET[path] = match;
-    this._cacheIndex = (evictIndex + 1) % this._cacheLimit;
+    this._cacheGETIndex = (evictIndex + 1) % this._cacheLimit;
   }
 
   private _clearCache(): void {
     this._cacheGET = Object.create(null);
+    this._cacheGETPaths = new Array(this._cacheLimit);
+    this._cacheGETSize = 0;
+    this._cacheGETIndex = 0;
     this._cacheOther = new Map();
     this._cacheMethods = new Array(this._cacheLimit);
     this._cachePaths = new Array(this._cacheLimit);
