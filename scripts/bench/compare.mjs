@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const tscPath = resolve(root, 'node_modules', 'typescript', 'bin', 'tsc');
+const compareTime = Number(process.env.BENCH_COMPARE_TIME || 5000);
+const compareRuns = Number(process.env.BENCH_COMPARE_RUNS || 3);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', ...options });
@@ -32,8 +34,8 @@ function buildRouter(projectDir, outDir) {
   return resolve(outDir, 'index.js');
 }
 
-function runBench(routerPath) {
-  const args = ['bench/bench.mjs', '--json', '--time', '1000', '--seed', String(seed)];
+function runBench(routerPath, runSeed) {
+  const args = ['bench/bench.mjs', '--json', '--time', String(compareTime), '--seed', String(runSeed)];
   if (routerPath) {
     args.push('--router', routerPath);
   }
@@ -42,6 +44,21 @@ function runBench(routerPath) {
     throw new Error(result.stderr || 'Benchmark failed');
   }
   return JSON.parse(result.stdout);
+}
+
+function bestOfRuns(routerPath) {
+  const bestByName = new Map();
+  for (let runIndex = 0; runIndex < compareRuns; runIndex += 1) {
+    const runSeed = seed + runIndex;
+    const runResult = runBench(routerPath, runSeed);
+    for (const entry of runResult.results) {
+      const best = bestByName.get(entry.name);
+      if (!best || entry.hz > best.hz) {
+        bestByName.set(entry.name, entry);
+      }
+    }
+  }
+  return { results: [...bestByName.values()] };
 }
 
 function formatDelta(current, previous) {
@@ -55,7 +72,7 @@ const previousIndex = getPreviousIndex();
 const seed = process.env.BENCH_SEED ? Number(process.env.BENCH_SEED) : Date.now();
 if (!previousIndex) {
   console.log('No previous commit found. Running current benchmarks only.');
-  const current = runBench();
+  const current = bestOfRuns();
   console.log(JSON.stringify(current, null, 2));
   process.exit(0);
 }
@@ -74,12 +91,12 @@ try {
   const previousPath = buildRouter(previousWorktree, resolve(tmpDir, 'prev-dist'));
   const currentPath = buildRouter(root, resolve(tmpDir, 'current-dist'));
 
-  const current = runBench(currentPath);
-  const previous = runBench(previousPath);
+  const current = bestOfRuns(currentPath);
+  const previous = bestOfRuns(previousPath);
 
   const previousMap = new Map(previous.results.map((entry) => [entry.name, entry]));
 
-  console.log('Benchmark comparison (current vs previous):');
+  console.log(`Benchmark comparison (best of ${compareRuns}, ${compareTime}ms each, current vs previous):`);
   for (const entry of current.results) {
     const prev = previousMap.get(entry.name);
     if (!prev) {

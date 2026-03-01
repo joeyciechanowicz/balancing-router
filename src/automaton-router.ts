@@ -198,6 +198,17 @@ export class AutomatonRouter {
   }
 
   private _findInAutomaton(automaton: MethodAutomaton, path: string, depth: number): RouteMatch | null {
+    const validators = this._validators;
+    const dynKind = automaton.dynKind;
+    const dynNameIds = automaton.dynNameIds;
+    const dynValidatorIds = automaton.dynValidatorIds;
+    const dynNext = automaton.dynNext;
+    const stateDynOffset = automaton.stateDynOffset;
+    const stateDynCount = automaton.stateDynCount;
+    const stateAcceptIndex = automaton.stateAcceptIndex;
+    const stateStaticMaps = automaton.stateStaticMaps;
+    const paramNames = automaton.paramNames;
+    const accepts = automaton.accepts;
     const stateStack = this._stateStack;
     const indexStack = this._indexStack;
     const capStack = this._capStack;
@@ -263,15 +274,15 @@ export class AutomatonRouter {
       top -= 1;
 
       if (index === depth) {
-        const acceptIndex = automaton.stateAcceptIndex[state];
+        const acceptIndex = stateAcceptIndex[state];
         if (acceptIndex >= 0) {
-          const accept = automaton.accepts[acceptIndex];
+          const accept = accepts[acceptIndex];
           if (capCount === 0) {
             return { handler: accept.handler, params: EMPTY_PARAMS, store: accept.store };
           }
           const params = Object.create(null) as Record<string, string>;
           for (let i = 0; i < capCount; i += 1) {
-            params[automaton.paramNames[capNameIds[i]]] =
+            params[paramNames[capNameIds[i]]] =
               capRestEpoch[i] === capEpoch
                 ? buildRestFromPositions(path, segmentStarts, segmentEnds, capRestFrom[i], depth)
                 : capValues[i];
@@ -279,26 +290,26 @@ export class AutomatonRouter {
           return { handler: accept.handler, params, store: accept.store };
         }
 
-        const dynStart = automaton.stateDynOffset[state];
-        const dynCount = automaton.stateDynCount[state];
+        const dynStart = stateDynOffset[state];
+        const dynCount = stateDynCount[state];
         for (let i = dynCount - 1; i >= 0; i -= 1) {
           const edgeIndex = dynStart + i;
-          if (automaton.dynKind[edgeIndex] !== DYN_WILDCARD) continue;
-          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], '', depth);
+          if (dynKind[edgeIndex] !== DYN_WILDCARD) continue;
+          push(dynNext[edgeIndex], depth, capCount, dynNameIds[edgeIndex], '', depth);
         }
         continue;
       }
 
       const segment = path.slice(segmentStarts[index], segmentEnds[index]);
 
-      const dynStart = automaton.stateDynOffset[state];
-      const dynCount = automaton.stateDynCount[state];
+      const dynStart = stateDynOffset[state];
+      const dynCount = stateDynCount[state];
       for (let i = dynCount - 1; i >= 0; i -= 1) {
         const edgeIndex = dynStart + i;
-        const kind = automaton.dynKind[edgeIndex];
+        const kind = dynKind[edgeIndex];
         if (kind === DYN_PARAM) {
-          const validatorId = automaton.dynValidatorIds[edgeIndex];
-          const validator = this._validators[validatorId];
+          const validatorId = dynValidatorIds[edgeIndex];
+          const validator = validators[validatorId];
           switch (validator.code) {
             case VAL_NONE:
               break;
@@ -323,28 +334,19 @@ export class AutomatonRouter {
             default:
               continue;
           }
-          push(automaton.dynNext[edgeIndex], index + 1, capCount, automaton.dynNameIds[edgeIndex], segment, -1);
+          push(dynNext[edgeIndex], index + 1, capCount, dynNameIds[edgeIndex], segment, -1);
           continue;
         }
         if (kind === DYN_WILDCARD) {
-          push(automaton.dynNext[edgeIndex], depth, capCount, automaton.dynNameIds[edgeIndex], '', index);
+          push(dynNext[edgeIndex], depth, capCount, dynNameIds[edgeIndex], '', index);
         }
       }
 
-      const staticMap = automaton.stateStaticMaps[state];
+      const staticMap = stateStaticMaps[state];
       if (staticMap) {
         const staticNext = staticMap[segment];
         if (staticNext !== undefined) {
           push(staticNext, index + 1, capCount, -1, '', -1);
-        }
-      } else {
-        const staticStart = automaton.stateStaticOffset[state];
-        const staticCount = automaton.stateStaticCount[state];
-        for (let i = 0; i < staticCount; i += 1) {
-          const edgeIndex = staticStart + i;
-          if (automaton.literals[automaton.staticLiteralIds[edgeIndex]] !== segment) continue;
-          push(automaton.staticNext[edgeIndex], index + 1, capCount, -1, '', -1);
-          break;
         }
       }
     }
