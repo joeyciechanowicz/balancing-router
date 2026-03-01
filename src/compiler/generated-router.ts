@@ -72,16 +72,31 @@ export class GeneratedRouter {
 
   find(method: string, path: string): RouteMatch | null {
     if (method === 'GET') {
-      return this._findWithMethod('GET', path);
+      return this._findGET(path);
     }
     const methodKey = normalizeMethod(method);
     return this._findWithMethod(methodKey, path);
+  }
+
+  private _findGET(path: string): RouteMatch | null {
+    const pathStr = normalizePath(path);
+    const cached = this._cacheGET[pathStr];
+    if (cached !== undefined) return cached;
+    const resolved = this._resolveMatch('GET', pathStr);
+    this._cacheSetGET(pathStr, resolved);
+    return resolved;
   }
 
   private _findWithMethod(methodKey: string, path: string): RouteMatch | null {
     const pathStr = normalizePath(path);
     const cached = this._cacheGet(methodKey, pathStr);
     if (cached !== undefined) return cached;
+    const resolved = this._resolveMatch(methodKey, pathStr);
+    this._cacheSet(methodKey, pathStr, resolved);
+    return resolved;
+  }
+
+  private _resolveMatch(methodKey: string, pathStr: string): RouteMatch | null {
     const segments = splitPath(pathStr);
     const depth = segments.length;
 
@@ -96,9 +111,7 @@ export class GeneratedRouter {
       if (!params) continue;
 
       if (route.method === methodKey) {
-        const resolved = { handler: route.handler, params, store: route.store };
-        this._cacheSet(methodKey, pathStr, resolved);
-        return resolved;
+        return { handler: route.handler, params, store: route.store };
       }
 
       if (route.method === '*' && route.order < wildcardOrder) {
@@ -107,7 +120,6 @@ export class GeneratedRouter {
       }
     }
 
-    this._cacheSet(methodKey, pathStr, wildcardMatch);
     return wildcardMatch;
   }
 
@@ -169,6 +181,37 @@ export class GeneratedRouter {
     this._cacheMethods[evictIndex] = method;
     this._cachePaths[evictIndex] = path;
     methodMap[path] = match;
+    this._cacheIndex = (evictIndex + 1) % this._cacheLimit;
+  }
+
+  private _cacheSetGET(path: string, match: RouteMatch | null): void {
+    if (this._cacheLimit <= 0) return;
+    if (this._cacheGET[path] !== undefined) {
+      this._cacheGET[path] = match;
+      return;
+    }
+
+    if (this._cacheSize < this._cacheLimit) {
+      this._cacheMethods[this._cacheSize] = 'GET';
+      this._cachePaths[this._cacheSize] = path;
+      this._cacheSize += 1;
+      this._cacheGET[path] = match;
+      return;
+    }
+
+    const evictIndex = this._cacheIndex;
+    const evictMethod = this._cacheMethods[evictIndex];
+    const evictPath = this._cachePaths[evictIndex];
+    if (evictMethod === 'GET') {
+      delete this._cacheGET[evictPath];
+    } else {
+      const evictMap = this._cacheOther.get(evictMethod);
+      if (evictMap) delete evictMap[evictPath];
+    }
+
+    this._cacheMethods[evictIndex] = 'GET';
+    this._cachePaths[evictIndex] = path;
+    this._cacheGET[path] = match;
     this._cacheIndex = (evictIndex + 1) % this._cacheLimit;
   }
 
