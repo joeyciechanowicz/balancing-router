@@ -141,7 +141,7 @@ export class AutomatonRouter {
       const cached = this._cacheGET[pathStr];
       if (cached !== undefined) return cached;
       const resolved = this._findResolved('GET', pathStr);
-      this._cacheSet('GET', pathStr, resolved);
+      this._cacheSetGET(pathStr, resolved);
       return resolved;
     }
 
@@ -700,6 +700,37 @@ export class AutomatonRouter {
       this._cacheIndex = next;
     }
     methodCacheEntry[path] = value;
+  }
+
+  private _cacheSetGET(path: string, value: RouteMatch | null): void {
+    if (this._cacheLimit <= 0) return;
+    if (this._cacheGET[path] !== undefined) {
+      this._cacheGET[path] = value;
+      return;
+    }
+    if (this._cacheSize < this._cacheLimit) {
+      const writeIndex = this._cacheSize;
+      this._cacheMethods[writeIndex] = 'GET';
+      this._cachePaths[writeIndex] = path;
+      this._cacheSize += 1;
+      this._cacheGET[path] = value;
+      return;
+    }
+    const evictIndex = this._cacheIndex;
+    const oldestMethod = this._cacheMethods[evictIndex];
+    const oldestPath = this._cachePaths[evictIndex];
+    if (oldestMethod === 'GET') {
+      delete this._cacheGET[oldestPath];
+    } else if (oldestMethod !== undefined) {
+      const oldCache = this._cacheOther.get(oldestMethod);
+      if (oldCache) delete oldCache[oldestPath];
+    }
+    this._cacheMethods[evictIndex] = 'GET';
+    this._cachePaths[evictIndex] = path;
+    let next = evictIndex + 1;
+    if (next === this._cacheLimit) next = 0;
+    this._cacheIndex = next;
+    this._cacheGET[path] = value;
   }
 
   private _getMethodCache(method: string): Record<string, RouteMatch | null> | undefined {
