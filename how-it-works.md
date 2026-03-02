@@ -16,8 +16,6 @@ The key idea is:
 - `router.find(method, path)`
   - Returns `{ handler, params, store? }` or `null`.
   - Internally normalizes `method` and ensures `path` starts with `/`.
-- `router.rebalance()`
-  - No-op in v2; the compiled automaton is immutable during matching.
 
 ## Data Model At A Glance
 
@@ -34,38 +32,36 @@ At runtime, v2 matches using a compact per-method automaton:
 - **Accept state**: `stateAcceptIndex[state]` points to an `accepts[]` entry containing `{handler, store?}`.
 
 ```mermaid
-classDiagram
-  class AutomatonRouter {
-    +on(method, path, handler, store?)
-    +find(method, path) RouteMatch | null
-    -_compile()
-    -_compileMethod(defs) MethodAutomaton
-    -_findResolved(methodKey, pathStr)
-    -_scanPathSegments(pathStr) depth
-    -_findInAutomaton(automaton, pathStr, depth)
-    -_findInRegex(methodKey, pathStr, depth)
-  }
+flowchart TD
+    A["Route pattern string<br/>/abc/:name([a-z]+)/:other(\\d+)"] --> B["normalizePath()"]
+    B --> C["split on '/'<br/>tokenizePathPattern(): normalized.split('/').slice(1)"]
+    C --> D["Raw segments<br/>1) abc<br/>2) :name([a-z]+)<br/>3) :other(\\d+)"]
 
-  class MethodAutomaton {
-    Int32Array stateDynOffset
-    Int32Array stateDynCount
-    Int32Array stateAcceptIndex
-    Uint8Array dynKind
-    Int32Array dynNameIds
-    Int32Array dynValidatorIds
-    Int32Array dynNext
-    stateStaticMaps: Record~string,number~[]
-    string[] paramNames
-    AcceptRecord[] accepts
-  }
+    D --> E1["parseParamSegment('abc') -> null"]
+    E1 --> T1["Token: static('abc')"]
 
-  class AcceptRecord {
-    handler
-    store?
-  }
+    D --> E2["parseParamSegment(':name([a-z]+)')"]
+    E2 --> T2["Token: param<br/>name=name<br/>pattern=[a-z]+"]
 
-  AutomatonRouter --> MethodAutomaton
-  MethodAutomaton --> AcceptRecord
+    D --> E3["parseParamSegment(':other(\\d+)')"]
+    E3 --> T3["Token: param<br/>name=other<br/>pattern=\\d+"]
+
+    subgraph Build["Compile (per method)"]
+      T1 --> S0["BuildState root"]
+      S0 -->|static edge: abc| S1["BuildState"]
+      S1 -->|dyn edge: param name| S2["BuildState"]
+      S2 -->|dyn edge: param other| S3["BuildState accept"]
+    end
+
+    subgraph Runtime["Match (find method,path)"]
+      P["Incoming path string"] --> Q["_scanPathSegments(path)<br/>fills starts/ends, returns depth"]
+      Q --> R["_findInAutomaton(methodAutomaton, path, depth)"]
+      R --> U["At each state+segment:<br/>1) try dyn edges (validators)<br/>2) try static
+  map[segment]"]
+      U --> V["Accept state reached?"]
+      V -->|yes| W["Build params object (only if captures exist)"]
+      V -->|no| X["No match -> try '*' method / regex fallback -> null"]
+    end
 ```
 
 ## Build Phase (Compilation)
@@ -234,4 +230,3 @@ flowchart LR
   - `_scanPathSegments` (per-request cost)
   - `_findInAutomaton` (backtracking, validator checks, and segment slicing)
   - caching behavior under mixed hit/404 workloads
-
