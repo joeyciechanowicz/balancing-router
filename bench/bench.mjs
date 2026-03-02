@@ -279,6 +279,32 @@ function buildMedleyRouter() {
   }
 }
 
+function buildPathToRegexpLinear() {
+  try {
+    const { match } = require("path-to-regexp");
+    const entries = frameworkRouteFixtures.map(([method, path, handler]) => {
+      return {
+        method,
+        handler,
+        match: match(toPathToRegexpPattern(path), { decode: false }),
+      };
+    });
+    return {
+      lookup: (method, path) => {
+        for (let i = 0; i < entries.length; i += 1) {
+          const entry = entries[i];
+          if (entry.method !== method && entry.method !== "*") continue;
+          if (entry.match(path)) return entry.handler;
+        }
+        return null;
+      },
+    };
+  } catch (error) {
+    logBuildError("path-to-regexp-linear", error);
+    return null;
+  }
+}
+
 function buildIttyRouter() {
   try {
     const { IttyRouter } = require("itty-router");
@@ -475,6 +501,7 @@ async function runBenchmarks() {
     ["trouter", () => buildTrouter()],
     ["radix3", () => buildRadix3()],
     ["@medley/router", () => buildMedleyRouter()],
+    ["path-to-regexp-linear", () => buildPathToRegexpLinear()],
     ["itty-router", () => (asyncMode ? buildIttyRouter() : null)],
     ["fastify", () => (asyncMode ? buildFastify() : null)],
     ["hono", () => (asyncMode ? buildHono() : null)],

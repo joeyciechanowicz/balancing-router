@@ -37,6 +37,7 @@
     "itty-router": "^5.0.22",
     "koa": "^3.1.1",
     "mitata": "^1.0.34",
+    "path-to-regexp": "^8.3.0",
     "radix3": "^1.1.2",
     "trouter": "^4.0.0",
     "tsx": "^4.19.2",
