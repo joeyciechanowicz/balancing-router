@@ -204,61 +204,6 @@ function buildBalancingRouterV2() {
   };
 }
 
-function buildFindMyWay() {
-  try {
-    const findMyWay = require("find-my-way");
-    const router = findMyWay();
-    for (const [method, path, handler] of routeFixtures) {
-      router.on(method, path, handler);
-    }
-    return { lookup: (method, path) => router.find(method, path) };
-  } catch (error) {
-    logBuildError("find-my-way", error);
-    return null;
-  }
-}
-
-function buildTrouter() {
-  try {
-    const { Trouter } = require("trouter");
-    const router = new Trouter();
-    for (const [method, path, handler] of routeFixtures) {
-      router.add(method, path, handler);
-    }
-    return { lookup: (method, path) => router.find(method, path) };
-  } catch (error) {
-    logBuildError("trouter", error);
-    return null;
-  }
-}
-
-function buildRadix3() {
-  try {
-    const { createRouter: createRadixRouter } = require("radix3");
-    const router = createRadixRouter();
-    const stores = new Map();
-    for (const [method, path, handler] of routeFixtures) {
-      let store = stores.get(path);
-      if (!store) {
-        store = Object.create(null);
-        router.insert(path, store);
-        stores.set(path, store);
-      }
-      store[method] = handler;
-    }
-    return {
-      lookup: (method, path) => {
-        const match = router.lookup(path);
-        if (!match) return null;
-        return match[method] ?? match["*"] ?? null;
-      },
-    };
-  } catch (error) {
-    logBuildError("radix3", error);
-    return null;
-  }
-}
-
 function buildMedleyRouter() {
   try {
     const Router = require("@medley/router");
@@ -322,100 +267,6 @@ function buildPathToRegexpLinear() {
   }
 }
 
-function buildIttyRouter() {
-  try {
-    const { IttyRouter } = require("itty-router");
-    const router = IttyRouter();
-    for (const [method, path, handler] of routeFixtures) {
-      const register = router[method.toLowerCase()] ?? router.all;
-      register.call(router, path, handler);
-    }
-    return {
-      lookup: async (method, path, request) => {
-        return router.fetch(request ?? getRequest(method, path));
-      },
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("itty-router", error);
-    return null;
-  }
-}
-
-async function buildFastify() {
-  try {
-    const fastifyFactory = require("fastify");
-    const fastify = fastifyFactory({ logger: false });
-    for (const [method, path] of routeFixtures) {
-      fastify.route({
-        method,
-        url: path,
-        handler: () => "",
-      });
-    }
-    await fastify.ready();
-    return {
-      lookup: (method, path) => fastify.inject({ method, url: path }),
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("fastify", error);
-    return null;
-  }
-}
-
-function buildHono() {
-  try {
-    const { Hono } = require("hono");
-    const app = new Hono();
-    for (const [method, path] of frameworkRouteFixtures) {
-      app.on(method, path, () => new Response(null));
-    }
-    return {
-      lookup: (method, path, request) =>
-        app.request(request ?? path, request ? undefined : { method }),
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("hono", error);
-    return null;
-  }
-}
-
-function buildH3() {
-  try {
-    const {
-      createApp,
-      createRouter,
-      eventHandler,
-      toWebHandler,
-    } = require("h3");
-    const app = createApp();
-    const router = createRouter();
-    for (const [method, path] of routeFixtures) {
-      router[method.toLowerCase()](
-        path,
-        eventHandler(() => ""),
-      );
-    }
-    app.use(router);
-    const handler = toWebHandler(app);
-    return {
-      lookup: (method, path, request) => {
-        return handler(request ?? getRequest(method, path));
-      },
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("h3", error);
-    return null;
-  }
-}
-
 function createMockReqRes(method, path) {
   const { IncomingMessage, ServerResponse } = require("node:http");
   const { PassThrough } = require("node:stream");
@@ -442,59 +293,6 @@ function toRegexparamPattern(path) {
   return path.replace(/:([A-Za-z0-9_]+)\*/g, "*");
 }
 
-function buildKoaRouter() {
-  try {
-    const Koa = require("koa");
-    const Router = require("@koa/router");
-    const app = new Koa();
-    const router = new Router();
-    for (const [method, path] of frameworkRouteFixtures) {
-      const koaPath = toPathToRegexpPattern(path);
-      router[method.toLowerCase()](koaPath, (ctx) => {
-        ctx.status = 200;
-        ctx.body = "";
-      });
-    }
-    app.use(router.routes());
-    const handler = app.callback();
-    return {
-      lookup: async (method, path) => {
-        const { req, res } = createMockReqRes(method, path);
-        return handler(req, res);
-      },
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("@koa/router", error);
-    return null;
-  }
-}
-
-function buildTinyHttp() {
-  try {
-    const { App } = require("@tinyhttp/app");
-    const app = new App();
-    for (const [method, path] of routeFixtures) {
-      const tinyPath = toRegexparamPattern(path);
-      app[method.toLowerCase()](tinyPath, (_req, res) => {
-        res.status(200).end("");
-      });
-    }
-    return {
-      lookup: async (method, path) => {
-        const { req, res } = createMockReqRes(method, path);
-        return app.handler(req, res);
-      },
-      async: true,
-      framework: true,
-    };
-  } catch (error) {
-    logBuildError("@tinyhttp/app", error);
-    return null;
-  }
-}
-
 function calculateRme(samples) {
   if (!samples || samples.length < 2) return 0;
   const n = samples.length;
@@ -512,20 +310,9 @@ async function runBenchmarks() {
   const results = [];
 
   const routerBuilders = [
-    ["balancing-router", () => buildBalancingRouter()],
-    ["balancing-router-v2", () => buildBalancingRouterV2()],
-    ["find-my-way", () => buildFindMyWay()],
-    ["trouter", () => buildTrouter()],
-    ["radix3", () => buildRadix3()],
     ["@medley/router", () => buildMedleyRouter()],
     ["medley-router-local", () => buildMedleyRouterLocal()],
     ["path-to-regexp-linear", () => buildPathToRegexpLinear()],
-    ["itty-router", () => (asyncMode ? buildIttyRouter() : null)],
-    ["fastify", () => (asyncMode ? buildFastify() : null)],
-    ["hono", () => (asyncMode ? buildHono() : null)],
-    ["h3", () => (asyncMode ? buildH3() : null)],
-    ["@koa/router", () => (asyncMode ? buildKoaRouter() : null)],
-    ["@tinyhttp/app", () => (asyncMode ? buildTinyHttp() : null)],
   ];
 
   const routers = [];
