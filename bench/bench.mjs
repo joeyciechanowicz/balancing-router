@@ -51,7 +51,8 @@ function loadRouter() {
   return require(resolve(root, "dist", "index.js"));
 }
 
-const { createRouter, createAutomatonRouter } = loadRouter();
+const { createRouter, createAutomatonRouter, createMedleyRouter } =
+  loadRouter();
 function logBuildError(name, error) {
   const message = error && error.stack ? error.stack : String(error);
   console.error(`[bench] ${name} setup failed:\n${message}`);
@@ -279,6 +280,22 @@ function buildMedleyRouter() {
   }
 }
 
+function buildMedleyRouterLocal() {
+  if (typeof createMedleyRouter !== "function") return null;
+  const router = createMedleyRouter();
+  for (const [method, path, handler] of routeFixtures) {
+    const store = router.register(path);
+    store[method] = handler;
+  }
+  return {
+    lookup: (method, path) => {
+      const match = router.find(path);
+      if (!match) return null;
+      return match.store[method] ?? match.store["*"] ?? null;
+    },
+  };
+}
+
 function buildPathToRegexpLinear() {
   try {
     const { match } = require("path-to-regexp");
@@ -293,7 +310,7 @@ function buildPathToRegexpLinear() {
       lookup: (method, path) => {
         for (let i = 0; i < entries.length; i += 1) {
           const entry = entries[i];
-          if (entry.method !== method && entry.method !== "*") continue;
+          // if (entry.method !== method && entry.method !== "*") continue;
           if (entry.match(path)) return entry.handler;
         }
         return null;
@@ -501,6 +518,7 @@ async function runBenchmarks() {
     ["trouter", () => buildTrouter()],
     ["radix3", () => buildRadix3()],
     ["@medley/router", () => buildMedleyRouter()],
+    ["medley-router-local", () => buildMedleyRouterLocal()],
     ["path-to-regexp-linear", () => buildPathToRegexpLinear()],
     ["itty-router", () => (asyncMode ? buildIttyRouter() : null)],
     ["fastify", () => (asyncMode ? buildFastify() : null)],
@@ -538,8 +556,8 @@ async function runBenchmarks() {
             await lookup(method, path);
           }
         : () => {
-          const [method, path] = nextLookup();
-          lookup(method, path);
+            const [method, path] = nextLookup();
+            lookup(method, path);
           };
       for (let i = 0; i < warmupRounds; i += 1) {
         if (asyncMode) {

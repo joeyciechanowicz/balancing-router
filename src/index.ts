@@ -552,6 +552,7 @@ export function createRouter(): Router {
 }
 
 export { createAutomatonRouter } from './automaton-router';
+export { createMedleyRouter } from './medley-router';
 
 const EMPTY_PARAMS = Object.create(null) as Record<string, string>;
 

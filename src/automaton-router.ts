@@ -1,4 +1,8 @@
-export type RouteHandler = (req: any, res: any, params: Record<string, string>) => any;
+export type RouteHandler = (
+  req: any,
+  res: any,
+  params: Record<string, string>,
+) => any;
 
 export interface RouteMatch {
   handler: RouteHandler;
@@ -23,18 +27,18 @@ interface RegexRouteDef {
 }
 
 type SegmentToken =
-  | { kind: 'static'; value: string }
-  | { kind: 'param'; name: string; pattern?: string }
-  | { kind: 'wildcard'; name: string };
+  | { kind: "static"; value: string }
+  | { kind: "param"; name: string; pattern?: string }
+  | { kind: "wildcard"; name: string };
 
 interface ValidatorEntry {
-  kind: 'none' | 'int' | 'alpha' | 'slug' | 'locale' | 'uuid' | 'regex';
+  kind: "none" | "int" | "alpha" | "slug" | "locale" | "uuid" | "regex";
   code: number;
   regex?: RegExp;
 }
 
 interface BuildDynEdge {
-  kind: 'param' | 'wildcard';
+  kind: "param" | "wildcard";
   name: string;
   validatorId: number;
   next: BuildState;
@@ -100,13 +104,15 @@ export class AutomatonRouter {
   private _automatonWildcard: MethodAutomaton | null = null;
   private readonly _regexRoutes = new Map<string, RegexRouteDef[]>();
   private _hasRegexRoutes = false;
-  private readonly _validators: ValidatorEntry[] = [{ kind: 'none', code: VAL_NONE }];
+  private readonly _validators: ValidatorEntry[] = [
+    { kind: "none", code: VAL_NONE },
+  ];
   private readonly _validatorCache = new Map<string, number>();
   private _stateStack: number[] = [0];
   private _indexStack: number[] = [0];
   private _capStack: number[] = [0];
   private _capNameIds: number[] = [0];
-  private _capValues: string[] = [''];
+  private _capValues: string[] = [""];
   private _capRestFrom: number[] = [0];
   private _capRestEpoch: number[] = [0];
   private _capEpochCounter = 1;
@@ -120,7 +126,12 @@ export class AutomatonRouter {
   private _segmentStarts: number[] = [0];
   private _segmentEnds: number[] = [0];
 
-  on(method: string | string[], path: string | RegExp, handler: RouteHandler, store?: any): this {
+  on(
+    method: string | string[],
+    path: string | RegExp,
+    handler: RouteHandler,
+    store?: any,
+  ): this {
     const methods = Array.isArray(method) ? method : [method];
     for (const methodItem of methods) {
       this._routes.push({
@@ -138,25 +149,26 @@ export class AutomatonRouter {
   find(method: string, path: string): RouteMatch | null {
     this._ensureCompiled();
 
-    const pathStr = path.charCodeAt(0) === 47 ? path : path.length === 0 ? '/' : `/${path}`;
+    const pathStr =
+      path.charCodeAt(0) === 47 ? path : path.length === 0 ? "/" : `/${path}`;
 
-    if (method === 'GET') {
+    if (method === "GET") {
       const cached = this._cacheGET[pathStr];
       if (cached !== undefined) return cached;
-      const resolved = this._findResolved('GET', pathStr);
+      const resolved = this._findResolved("GET", pathStr);
       this._cacheSetGET(pathStr, resolved);
       return resolved;
     }
 
     let methodKey: string;
     switch (method) {
-      case 'POST':
-      case 'PUT':
-      case 'PATCH':
-      case 'DELETE':
-      case 'HEAD':
-      case 'OPTIONS':
-      case '*':
+      case "POST":
+      case "PUT":
+      case "PATCH":
+      case "DELETE":
+      case "HEAD":
+      case "OPTIONS":
+      case "*":
         methodKey = method;
         break;
       default:
@@ -177,14 +189,22 @@ export class AutomatonRouter {
     const depth = this._scanPathSegments(pathStr);
 
     const methodAutomaton =
-      methodKey === 'GET' ? this._automatonGET : methodKey === '*' ? this._automatonWildcard : this._automata.get(methodKey);
+      methodKey === "GET"
+        ? this._automatonGET
+        : methodKey === "*"
+          ? this._automatonWildcard
+          : this._automata.get(methodKey);
     if (methodAutomaton) {
       const match = this._findInAutomaton(methodAutomaton, pathStr, depth);
       if (match) return match;
     }
 
-    if (methodKey !== '*' && this._automatonWildcard) {
-      const match = this._findInAutomaton(this._automatonWildcard, pathStr, depth);
+    if (methodKey !== "*" && this._automatonWildcard) {
+      const match = this._findInAutomaton(
+        this._automatonWildcard,
+        pathStr,
+        depth,
+      );
       if (match) return match;
     }
 
@@ -192,8 +212,8 @@ export class AutomatonRouter {
       const regexMatch = this._findInRegex(methodKey, pathStr, depth);
       if (regexMatch) return regexMatch;
 
-      if (methodKey !== '*') {
-        return this._findInRegex('*', pathStr, depth);
+      if (methodKey !== "*") {
+        return this._findInRegex("*", pathStr, depth);
       }
     }
 
@@ -204,19 +224,31 @@ export class AutomatonRouter {
     // v2 router is immutable at runtime; no-op for API compatibility.
   }
 
-  private _findInRegex(method: string, path: string, depth: number): RouteMatch | null {
+  private _findInRegex(
+    method: string,
+    path: string,
+    depth: number,
+  ): RouteMatch | null {
     const routes = this._regexRoutes.get(method);
     if (!routes || routes.length === 0) return null;
     for (let i = 0; i < routes.length; i += 1) {
       const route = routes[i];
       if (route.minDepth > depth) continue;
       if (!route.regex.test(path)) continue;
-      return { handler: route.handler, params: EMPTY_PARAMS, store: route.store };
+      return {
+        handler: route.handler,
+        params: EMPTY_PARAMS,
+        store: route.store,
+      };
     }
     return null;
   }
 
-  private _findInAutomaton(automaton: MethodAutomaton, path: string, depth: number): RouteMatch | null {
+  private _findInAutomaton(
+    automaton: MethodAutomaton,
+    path: string,
+    depth: number,
+  ): RouteMatch | null {
     const validators = this._validators;
     const dynKind = automaton.dynKind;
     const dynNameIds = automaton.dynNameIds;
@@ -272,7 +304,7 @@ export class AutomatonRouter {
           const growBy = capNameIds.length;
           for (let i = 0; i < growBy; i += 1) {
             capNameIds.push(0);
-            capValues.push('');
+            capValues.push("");
             capRestFrom.push(0);
             capRestEpoch.push(0);
           }
@@ -297,13 +329,23 @@ export class AutomatonRouter {
         if (acceptIndex >= 0) {
           const accept = accepts[acceptIndex];
           if (capCount === 0) {
-            return { handler: accept.handler, params: EMPTY_PARAMS, store: accept.store };
+            return {
+              handler: accept.handler,
+              params: EMPTY_PARAMS,
+              store: accept.store,
+            };
           }
           const params = Object.create(null) as Record<string, string>;
           for (let i = 0; i < capCount; i += 1) {
             params[paramNames[capNameIds[i]]] =
               capRestEpoch[i] === capEpoch
-                ? buildRestFromPositions(path, segmentStarts, segmentEnds, capRestFrom[i], depth)
+                ? buildRestFromPositions(
+                    path,
+                    segmentStarts,
+                    segmentEnds,
+                    capRestFrom[i],
+                    depth,
+                  )
                 : capValues[i];
           }
           return { handler: accept.handler, params, store: accept.store };
@@ -314,7 +356,14 @@ export class AutomatonRouter {
         for (let i = dynCount - 1; i >= 0; i -= 1) {
           const edgeIndex = dynStart + i;
           if (dynKind[edgeIndex] !== DYN_WILDCARD) continue;
-          push(dynNext[edgeIndex], depth, capCount, dynNameIds[edgeIndex], '', depth);
+          push(
+            dynNext[edgeIndex],
+            depth,
+            capCount,
+            dynNameIds[edgeIndex],
+            "",
+            depth,
+          );
         }
         continue;
       }
@@ -353,11 +402,25 @@ export class AutomatonRouter {
             default:
               continue;
           }
-          push(dynNext[edgeIndex], index + 1, capCount, dynNameIds[edgeIndex], segment, -1);
+          push(
+            dynNext[edgeIndex],
+            index + 1,
+            capCount,
+            dynNameIds[edgeIndex],
+            segment,
+            -1,
+          );
           continue;
         }
         if (kind === DYN_WILDCARD) {
-          push(dynNext[edgeIndex], depth, capCount, dynNameIds[edgeIndex], '', index);
+          push(
+            dynNext[edgeIndex],
+            depth,
+            capCount,
+            dynNameIds[edgeIndex],
+            "",
+            index,
+          );
         }
       }
 
@@ -365,7 +428,7 @@ export class AutomatonRouter {
       if (staticMap) {
         const staticNext = staticMap[segment];
         if (staticNext !== undefined) {
-          push(staticNext, index + 1, capCount, -1, '', -1);
+          push(staticNext, index + 1, capCount, -1, "", -1);
         }
       }
     }
@@ -381,7 +444,7 @@ export class AutomatonRouter {
     if (pathLen <= 1) return 0;
     let depth = 0;
     let start = 1;
-    let slash = path.indexOf('/', start);
+    let slash = path.indexOf("/", start);
     if (slash === -1) {
       if (starts.length === 0) starts.push(start);
       else starts[0] = start;
@@ -402,7 +465,7 @@ export class AutomatonRouter {
         depth += 1;
       }
       start = slash + 1;
-      slash = path.indexOf('/', start);
+      slash = path.indexOf("/", start);
     }
 
     if (start < pathLen) {
@@ -468,8 +531,8 @@ export class AutomatonRouter {
     for (const [method, defs] of groupedStringRoutes) {
       this._automata.set(method, this._compileMethod(defs));
     }
-    this._automatonGET = this._automata.get('GET') ?? null;
-    this._automatonWildcard = this._automata.get('*') ?? null;
+    this._automatonGET = this._automata.get("GET") ?? null;
+    this._automatonWildcard = this._automata.get("*") ?? null;
   }
 
   private _compileMethod(defs: RouteDef[]): MethodAutomaton {
@@ -481,7 +544,7 @@ export class AutomatonRouter {
       for (const segments of variants) {
         let node = root;
         for (const segment of segments) {
-          if (segment.kind === 'static') {
+          if (segment.kind === "static") {
             let next = node.staticEdges.get(segment.value);
             if (!next) {
               next = new BuildState();
@@ -491,9 +554,20 @@ export class AutomatonRouter {
             continue;
           }
 
-          const validatorId = segment.kind === 'param' ? this._getValidatorId(segment.pattern) : 0;
-          const score = scoreEdge(segment.kind, this._validators[validatorId]?.kind ?? 'none');
-          const existing = node.dynEdges.find((edge) => edge.kind === segment.kind && edge.name === segment.name && edge.validatorId === validatorId);
+          const validatorId =
+            segment.kind === "param"
+              ? this._getValidatorId(segment.pattern)
+              : 0;
+          const score = scoreEdge(
+            segment.kind,
+            this._validators[validatorId]?.kind ?? "none",
+          );
+          const existing = node.dynEdges.find(
+            (edge) =>
+              edge.kind === segment.kind &&
+              edge.name === segment.name &&
+              edge.validatorId === validatorId,
+          );
           if (existing) {
             node = existing.next;
           } else {
@@ -509,13 +583,16 @@ export class AutomatonRouter {
             node = next;
           }
 
-          if (segment.kind === 'wildcard') {
+          if (segment.kind === "wildcard") {
             break;
           }
         }
 
         if (node.acceptIndex >= 0) {
-          accepts[node.acceptIndex] = { handler: def.handler, store: def.store };
+          accepts[node.acceptIndex] = {
+            handler: def.handler,
+            store: def.store,
+          };
         } else {
           node.acceptIndex = accepts.length;
           accepts.push({ handler: def.handler, store: def.store });
@@ -560,7 +637,9 @@ export class AutomatonRouter {
     const dynNameIds: number[] = [];
     const dynValidatorIds: number[] = [];
     const dynNext: number[] = [];
-    const stateStaticMaps: Array<Record<string, number> | null> = new Array(stateCount);
+    const stateStaticMaps: Array<Record<string, number> | null> = new Array(
+      stateCount,
+    );
 
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
@@ -596,7 +675,7 @@ export class AutomatonRouter {
       stateDynOffset[i] = dynKind.length;
       stateDynCount[i] = orderedDynEdges.length;
       for (const edge of orderedDynEdges) {
-        dynKind.push(edge.kind === 'wildcard' ? DYN_WILDCARD : DYN_PARAM);
+        dynKind.push(edge.kind === "wildcard" ? DYN_WILDCARD : DYN_PARAM);
 
         let nameId = paramNameIds.get(edge.name);
         if (nameId === undefined) {
@@ -638,30 +717,35 @@ export class AutomatonRouter {
     const trimmed = pattern.trim();
     let entry: ValidatorEntry;
 
-    if (trimmed.startsWith('#')) {
+    if (trimmed.startsWith("#")) {
       const alias = trimmed.slice(1);
-      const aliasCode = VALIDATOR_ALIAS_CODES[alias as keyof typeof VALIDATOR_ALIAS_CODES];
+      const aliasCode =
+        VALIDATOR_ALIAS_CODES[alias as keyof typeof VALIDATOR_ALIAS_CODES];
       if (aliasCode === undefined) {
-        throw new Error(`[automaton-router] Unknown validator alias: ${trimmed}`);
+        throw new Error(
+          `[automaton-router] Unknown validator alias: ${trimmed}`,
+        );
       }
       switch (aliasCode) {
         case VAL_INT:
-          entry = { kind: 'int', code: VAL_INT };
+          entry = { kind: "int", code: VAL_INT };
           break;
         case VAL_ALPHA:
-          entry = { kind: 'alpha', code: VAL_ALPHA };
+          entry = { kind: "alpha", code: VAL_ALPHA };
           break;
         case VAL_SLUG:
-          entry = { kind: 'slug', code: VAL_SLUG };
+          entry = { kind: "slug", code: VAL_SLUG };
           break;
         case VAL_LOCALE:
-          entry = { kind: 'locale', code: VAL_LOCALE };
+          entry = { kind: "locale", code: VAL_LOCALE };
           break;
         case VAL_UUID:
-          entry = { kind: 'uuid', code: VAL_UUID };
+          entry = { kind: "uuid", code: VAL_UUID };
           break;
         default:
-          throw new Error(`[automaton-router] Unsupported validator alias code: ${aliasCode}`);
+          throw new Error(
+            `[automaton-router] Unsupported validator alias code: ${aliasCode}`,
+          );
       }
       const id = this._validators.length;
       this._validators.push(entry);
@@ -669,22 +753,23 @@ export class AutomatonRouter {
       return id;
     }
 
-    if (trimmed === '\\d+' || trimmed === '[0-9]+' || trimmed === '\\d{1,}') {
-      entry = { kind: 'int', code: VAL_INT };
-    } else if (trimmed === '[a-zA-Z]+' || trimmed === '[A-Za-z]+') {
-      entry = { kind: 'alpha', code: VAL_ALPHA };
-    } else if (trimmed === '[a-z0-9-]+' || trimmed === '[A-Za-z0-9-]+') {
-      entry = { kind: 'slug', code: VAL_SLUG };
-    } else if (trimmed === '[a-z]{2}-[A-Z]{2}') {
-      entry = { kind: 'locale', code: VAL_LOCALE };
+    if (trimmed === "\\d+" || trimmed === "[0-9]+" || trimmed === "\\d{1,}") {
+      entry = { kind: "int", code: VAL_INT };
+    } else if (trimmed === "[a-zA-Z]+" || trimmed === "[A-Za-z]+") {
+      entry = { kind: "alpha", code: VAL_ALPHA };
+    } else if (trimmed === "[a-z0-9-]+" || trimmed === "[A-Za-z0-9-]+") {
+      entry = { kind: "slug", code: VAL_SLUG };
+    } else if (trimmed === "[a-z]{2}-[A-Z]{2}") {
+      entry = { kind: "locale", code: VAL_LOCALE };
     } else if (
-      trimmed === '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}' ||
-      trimmed === '[0-9a-fA-F-]{36}'
+      trimmed ===
+        "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}" ||
+      trimmed === "[0-9a-fA-F-]{36}"
     ) {
-      entry = { kind: 'uuid', code: VAL_UUID };
+      entry = { kind: "uuid", code: VAL_UUID };
     } else {
       const regex = new RegExp(`^${trimmed}$`);
-      entry = { kind: 'regex', code: VAL_REGEX, regex };
+      entry = { kind: "regex", code: VAL_REGEX, regex };
     }
 
     const id = this._validators.length;
@@ -693,7 +778,11 @@ export class AutomatonRouter {
     return id;
   }
 
-  private _cacheSet(method: string, path: string, value: RouteMatch | null): void {
+  private _cacheSet(
+    method: string,
+    path: string,
+    value: RouteMatch | null,
+  ): void {
     if (this._cacheLimit <= 0) return;
     const methodCacheEntry = this._getOrCreateMethodCache(method);
     if (methodCacheEntry[path] !== undefined) {
@@ -731,7 +820,7 @@ export class AutomatonRouter {
     }
     if (this._cacheSize < this._cacheLimit) {
       const writeIndex = this._cacheSize;
-      this._cacheMethods[writeIndex] = 'GET';
+      this._cacheMethods[writeIndex] = "GET";
       this._cachePaths[writeIndex] = path;
       this._cacheSize += 1;
       this._cacheGET[path] = value;
@@ -740,13 +829,13 @@ export class AutomatonRouter {
     const evictIndex = this._cacheIndex;
     const oldestMethod = this._cacheMethods[evictIndex];
     const oldestPath = this._cachePaths[evictIndex];
-    if (oldestMethod === 'GET') {
+    if (oldestMethod === "GET") {
       delete this._cacheGET[oldestPath];
     } else if (oldestMethod !== undefined) {
       const oldCache = this._cacheOther.get(oldestMethod);
       if (oldCache) delete oldCache[oldestPath];
     }
-    this._cacheMethods[evictIndex] = 'GET';
+    this._cacheMethods[evictIndex] = "GET";
     this._cachePaths[evictIndex] = path;
     let next = evictIndex + 1;
     if (next === this._cacheLimit) next = 0;
@@ -754,13 +843,17 @@ export class AutomatonRouter {
     this._cacheGET[path] = value;
   }
 
-  private _getMethodCache(method: string): Record<string, RouteMatch | null> | undefined {
-    if (method === 'GET') return this._cacheGET;
+  private _getMethodCache(
+    method: string,
+  ): Record<string, RouteMatch | null> | undefined {
+    if (method === "GET") return this._cacheGET;
     return this._cacheOther.get(method);
   }
 
-  private _getOrCreateMethodCache(method: string): Record<string, RouteMatch | null> {
-    if (method === 'GET') return this._cacheGET;
+  private _getOrCreateMethodCache(
+    method: string,
+  ): Record<string, RouteMatch | null> {
+    if (method === "GET") return this._cacheGET;
     const existing = this._cacheOther.get(method);
     if (existing) return existing;
     const created = Object.create(null) as Record<string, RouteMatch | null>;
@@ -773,20 +866,23 @@ export function createAutomatonRouter(): AutomatonRouter {
   return new AutomatonRouter();
 }
 
-function scoreEdge(kind: 'param' | 'wildcard', validatorKind: ValidatorEntry['kind']): number {
-  if (kind === 'wildcard') return -100;
+function scoreEdge(
+  kind: "param" | "wildcard",
+  validatorKind: ValidatorEntry["kind"],
+): number {
+  if (kind === "wildcard") return -100;
   switch (validatorKind) {
-    case 'int':
+    case "int":
       return 40;
-    case 'uuid':
+    case "uuid":
       return 35;
-    case 'locale':
+    case "locale":
       return 30;
-    case 'alpha':
+    case "alpha":
       return 25;
-    case 'slug':
+    case "slug":
       return 20;
-    case 'regex':
+    case "regex":
       return 10;
     default:
       return 0;
@@ -794,28 +890,28 @@ function scoreEdge(kind: 'param' | 'wildcard', validatorKind: ValidatorEntry['ki
 }
 
 function normalizeMethod(method: string): string {
-  if (method == null) return '*';
-  if (typeof method === 'string') {
+  if (method == null) return "*";
+  if (typeof method === "string") {
     const cached = methodCache[method];
     if (cached !== undefined) return cached;
     const value = method.trim();
-    const normalized = value === '' ? '*' : value.toUpperCase();
+    const normalized = value === "" ? "*" : value.toUpperCase();
     methodCache[method] = normalized;
     return normalized;
   }
   const value = String(method).trim();
-  return value === '' ? '*' : value.toUpperCase();
+  return value === "" ? "*" : value.toUpperCase();
 }
 
 function normalizePath(path: string): string {
-  if (path == null) return '/';
+  if (path == null) return "/";
   const value = String(path);
-  if (value === '' || value === '/') return '/';
+  if (value === "" || value === "/") return "/";
   return value.charCodeAt(0) === 47 ? value : `/${value}`;
 }
 
 function splitPath(path: string): string[] {
-  if (path === '/') return [];
+  if (path === "/") return [];
   const segments: string[] = [];
   let start = 0;
   for (let i = 0; i < path.length; i += 1) {
@@ -835,10 +931,10 @@ function buildRestFromPositions(
   fromIndex: number,
   depth: number,
 ): string {
-  if (fromIndex >= depth) return '';
+  if (fromIndex >= depth) return "";
   let rest = path.slice(starts[fromIndex], ends[fromIndex]);
   for (let i = fromIndex + 1; i < depth; i += 1) {
-    rest += '/';
+    rest += "/";
     rest += path.slice(starts[i], ends[i]);
   }
   return rest;
@@ -846,20 +942,20 @@ function buildRestFromPositions(
 
 function tokenizePathPattern(path: string): SegmentToken[][] {
   const normalized = normalizePath(path);
-  if (normalized === '/') return [[]];
+  if (normalized === "/") return [[]];
 
-  const rawSegments = normalized.split('/').slice(1);
+  const rawSegments = normalized.split("/").slice(1);
   let variants: SegmentToken[][] = [[]];
 
   for (const rawSegment of rawSegments) {
     if (!rawSegment) continue;
 
-    if (rawSegment[0] === '(' && rawSegment[rawSegment.length - 1] === ')') {
-      const choices = rawSegment.slice(1, -1).split('|');
+    if (rawSegment[0] === "(" && rawSegment[rawSegment.length - 1] === ")") {
+      const choices = rawSegment.slice(1, -1).split("|");
       const nextVariants: SegmentToken[][] = [];
       for (const variant of variants) {
         for (const choice of choices) {
-          nextVariants.push([...variant, { kind: 'static', value: choice }]);
+          nextVariants.push([...variant, { kind: "static", value: choice }]);
         }
       }
       variants = nextVariants;
@@ -869,7 +965,7 @@ function tokenizePathPattern(path: string): SegmentToken[][] {
     const param = parseParamSegment(rawSegment);
     if (!param) {
       for (const variant of variants) {
-        variant.push({ kind: 'static', value: rawSegment });
+        variant.push({ kind: "static", value: rawSegment });
       }
       continue;
     }
@@ -879,9 +975,15 @@ function tokenizePathPattern(path: string): SegmentToken[][] {
       for (const variant of variants) {
         nextVariants.push([...variant]);
         if (param.wildcard) {
-          nextVariants.push([...variant, { kind: 'wildcard', name: param.name }]);
+          nextVariants.push([
+            ...variant,
+            { kind: "wildcard", name: param.name },
+          ]);
         } else {
-          nextVariants.push([...variant, { kind: 'param', name: param.name, pattern: param.pattern }]);
+          nextVariants.push([
+            ...variant,
+            { kind: "param", name: param.name, pattern: param.pattern },
+          ]);
         }
       }
       variants = nextVariants;
@@ -889,21 +991,33 @@ function tokenizePathPattern(path: string): SegmentToken[][] {
     }
 
     for (const variant of variants) {
-      if (param.wildcard) variant.push({ kind: 'wildcard', name: param.name });
-      else variant.push({ kind: 'param', name: param.name, pattern: param.pattern });
+      if (param.wildcard) variant.push({ kind: "wildcard", name: param.name });
+      else
+        variant.push({
+          kind: "param",
+          name: param.name,
+          pattern: param.pattern,
+        });
     }
   }
 
   return variants;
 }
 
-function parseParamSegment(segment: string): { name: string; pattern?: string; wildcard?: boolean; optional?: boolean } | null {
-  if (!segment.startsWith(':')) return null;
+function parseParamSegment(
+  segment: string,
+): {
+  name: string;
+  pattern?: string;
+  wildcard?: boolean;
+  optional?: boolean;
+} | null {
+  if (!segment.startsWith(":")) return null;
 
-  const optional = segment.endsWith('?');
+  const optional = segment.endsWith("?");
   const core = optional ? segment.slice(0, -1) : segment;
 
-  if (core.endsWith('*')) {
+  if (core.endsWith("*")) {
     return {
       name: core.slice(1, -1),
       wildcard: true,
@@ -911,9 +1025,9 @@ function parseParamSegment(segment: string): { name: string; pattern?: string; w
     };
   }
 
-  const open = core.indexOf('(');
+  const open = core.indexOf("(");
   if (open === -1) {
-    const aliasIndex = core.indexOf('#');
+    const aliasIndex = core.indexOf("#");
     if (aliasIndex === -1) {
       return { name: core.slice(1), optional };
     }
@@ -924,7 +1038,7 @@ function parseParamSegment(segment: string): { name: string; pattern?: string; w
     };
   }
 
-  const close = core.lastIndexOf(')');
+  const close = core.lastIndexOf(")");
   if (close <= open) {
     return { name: core.slice(1), optional };
   }
@@ -939,21 +1053,29 @@ function parseParamSegment(segment: string): { name: string; pattern?: string; w
 function extractRegexLiteralPrefix(regex: RegExp): string {
   const source = regex.source;
   let index = 0;
-  let prefix = '';
-  if (source.startsWith('^')) index += 1;
+  let prefix = "";
+  if (source.startsWith("^")) index += 1;
 
   for (; index < source.length; index += 1) {
     const char = source[index];
-    if (char === '\\') {
+    if (char === "\\") {
       const next = source[index + 1];
       if (!next) break;
       if (/[dDsSwWbB]/.test(next)) break;
-      if (next === 'x' || next === 'u' || next === 'p' || next === 'P' || next === 'k' || next === 'c') break;
+      if (
+        next === "x" ||
+        next === "u" ||
+        next === "p" ||
+        next === "P" ||
+        next === "k" ||
+        next === "c"
+      )
+        break;
       prefix += next;
       index += 1;
       continue;
     }
-    if ('[](){}.*+?|$^'.includes(char)) break;
+    if ("[](){}.*+?|$^".includes(char)) break;
     prefix += char;
   }
 
@@ -1000,7 +1122,17 @@ function isLocaleSegment(segment: string): boolean {
   const c2 = segment.charCodeAt(2);
   const c3 = segment.charCodeAt(3);
   const c4 = segment.charCodeAt(4);
-  return c0 >= 97 && c0 <= 122 && c1 >= 97 && c1 <= 122 && c2 === 45 && c3 >= 65 && c3 <= 90 && c4 >= 65 && c4 <= 90;
+  return (
+    c0 >= 97 &&
+    c0 <= 122 &&
+    c1 >= 97 &&
+    c1 <= 122 &&
+    c2 === 45 &&
+    c3 >= 65 &&
+    c3 <= 90 &&
+    c4 >= 65 &&
+    c4 <= 90
+  );
 }
 
 function isUuidSegment(segment: string): boolean {

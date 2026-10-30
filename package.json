@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test",
+    "test:consistency": "node test/router-consistency.test.mjs",
     "bench": "node bench/bench.mjs",
     "bench:static": "scripts/bench/run-static-bench.sh",
     "bench:gate": "node scripts/bench/step8-adoption-gate.mjs",
